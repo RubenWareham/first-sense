@@ -1,0 +1,25 @@
+schema_version: 1
+model: mmdetection/faster-rcnn-r50
+task: detect
+profile: smoke
+description: Two-step execution check; lowered thresholds exercise unlabeled losses,
+  not a quality recipe.
+upstream:
+  repository: https://github.com/open-mmlab/mmdetection
+  version: 3.3.0
+  reference: configs/soft_teacher/soft-teacher_faster-rcnn_r50-caffe_fpn_180k_semi-0.1-coco.py
+  license: Apache-2.0
+training:
+  schema_version: 1
+  learning: semi_supervised
+  max_iters: 2
+  imgsz: 128
+  batch: 2
+  seed: 0
+  device: cpu
+  backend_options:
+    lr: 1.0e-06
+    pseudo_label_initial_score_thr: 0.0
+    rpn_pseudo_thr: 0.0
+    cls_pseudo_thr: 0.0
+    reg_pseudo_thr: 1.0

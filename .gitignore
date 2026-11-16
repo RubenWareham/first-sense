@@ -1,0 +1,49 @@
+# Python environments and generated files
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Local experiments, data, model assets, and framework caches
+.wvision/
+runs/
+Data/
+data/
+weights/
+checkpoints/
+**/datasets/local/
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.engine
+*.cache
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local editor/agent state; repository AGENTS.md guidance remains source-controlled
+.agents/
+.codex/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+PROJECT_MISSION.md

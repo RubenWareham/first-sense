@@ -1,0 +1,22 @@
+schema_version: 1
+model: transformers/dinov3-convnext-tiny-detr
+task: detect
+profile: local_weights
+description: Train a local DINOv3 backbone and DETR head on detection labels; official
+  pretrained verification pending.
+upstream:
+  repository: https://github.com/huggingface/transformers
+  version: 5.22.2
+  reference: src/transformers/models/dinov3_convnext and models/detr
+  license: Apache-2.0 code; official DINOv3 weights have separate Meta terms
+training:
+  schema_version: 1
+  learning: supervised
+  max_iters: 1000
+  imgsz: 640
+  batch: 2
+  seed: 0
+  device: cpu
+  lr: 0.0001
+  initialization: local_backbone
+  freeze_backbone: false

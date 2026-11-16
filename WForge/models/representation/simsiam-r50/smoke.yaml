@@ -1,0 +1,18 @@
+schema_version: 1
+model: mmpretrain/simsiam-r50
+task: representation
+profile: smoke
+description: Two-step upstream image-only SimSiam execution check; use pretrain(model=...).
+upstream:
+  repository: https://github.com/open-mmlab/mmpretrain
+  version: 1.2.0
+  reference: configs/simsiam/simsiam_resnet50_8xb32-coslr-200e_in1k.py
+  license: Apache-2.0
+training:
+  schema_version: 1
+  max_iters: 2
+  imgsz: 64
+  batch: 2
+  seed: 0
+  device: cpu
+  lr: 0.0001

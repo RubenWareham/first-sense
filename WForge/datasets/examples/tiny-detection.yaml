@@ -1,0 +1,12 @@
+# Generate explicitly: python examples/make_tiny_dataset.py .wvision/tiny
+# Original synthetic CC0 images; execution checks only.
+schema_version: 1
+task: detect
+format: yolo
+root: ../../.wvision/tiny
+classes:
+  0: rectangle
+splits:
+  train_labeled: splits/train_labeled.txt
+  val: splits/val.txt
+  test: splits/test.txt

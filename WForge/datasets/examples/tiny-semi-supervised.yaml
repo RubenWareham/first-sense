@@ -1,0 +1,13 @@
+# Prepare explicitly from tiny-detection.yaml with --labeled-count 2 --seed 0.
+# Generated data and budget.json live in .wvision/tiny-budget, not this catalog.
+schema_version: 1
+task: detect
+format: yolo
+root: ../../.wvision/tiny-budget
+classes:
+  0: rectangle
+splits:
+  train_labeled: train_labeled.txt
+  train_unlabeled: train_unlabeled.txt
+  val: val.txt
+  test: test.txt

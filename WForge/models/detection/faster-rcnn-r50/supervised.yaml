@@ -1,0 +1,21 @@
+schema_version: 1
+model: mmdetection/faster-rcnn-r50
+task: detect
+profile: baseline
+description: Random-initialized supervised Faster R-CNN starting defaults; no benchmark
+  claim.
+upstream:
+  repository: https://github.com/open-mmlab/mmdetection
+  version: 3.3.0
+  reference: configs/soft_teacher/soft-teacher_faster-rcnn_r50-caffe_fpn_180k_semi-0.1-coco.py
+  license: Apache-2.0
+training:
+  schema_version: 1
+  learning: supervised
+  max_iters: 1000
+  imgsz: 640
+  batch: 2
+  seed: 0
+  device: cpu
+  backend_options:
+    lr: 0.01

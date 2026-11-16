@@ -1,0 +1,19 @@
+schema_version: 1
+model: ultralytics/yolo11n
+task: detect
+profile: baseline
+description: Supervised starting defaults; tune on validation for your dataset.
+upstream:
+  repository: https://github.com/ultralytics/ultralytics
+  version: 8.3.4
+  reference: cfg/models/11/yolo11.yaml
+  license: AGPL-3.0 or upstream enterprise terms
+training:
+  schema_version: 1
+  learning: supervised
+  epochs: 100
+  imgsz: 640
+  batch: 16
+  seed: 0
+  device: cpu
+  backend_options: {}

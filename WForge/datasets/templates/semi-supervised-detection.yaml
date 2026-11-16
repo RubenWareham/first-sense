@@ -1,0 +1,13 @@
+# Copy this file; define disjoint labeled/unlabeled training and held-out splits.
+# Unlabeled annotations are not read or staged. Do not move held-out data into training.
+schema_version: 1
+task: detect
+format: yolo
+root: ../local/my-dataset
+classes:
+  0: my-class
+splits:
+  train_labeled: splits/train_labeled.txt
+  train_unlabeled: splits/train_unlabeled.txt
+  val: splits/val.txt
+  test: splits/test.txt

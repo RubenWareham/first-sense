@@ -1,0 +1,10 @@
+# Independent DINOv3/DETR backend. Do not upgrade the existing YOLO/MMDetection environments.
+torch==2.8.0+cpu
+torchvision==0.23.0+cpu
+transformers==5.22.2
+accelerate==1.10.1
+safetensors==0.8.0
+pycocotools==2.0.11
+scipy==1.15.3
+numpy==1.26.4
+Pillow==10.3.0

@@ -1,0 +1,20 @@
+# Isolated single-NVIDIA-GPU backend. Install torch/torchvision from the cu121 index first.
+torch==2.1.0+cu121
+torchvision==0.16.0+cu121
+mmcv==2.1.0
+mmengine==0.10.7
+mmdet==3.3.0
+mmpretrain==1.2.0
+numpy==1.26.4
+Pillow==10.3.0
+opencv-python==4.10.0.84
+matplotlib==3.8.4
+yapf==0.40.1
+einops==0.8.2
+mat4py==0.6.0
+modelindex==0.0.2
+model-index==0.1.11
+Markdown==3.10.3
+ordered-set==4.1.0
+click==8.5.1
+setuptools==78.1.0

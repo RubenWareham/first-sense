@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem with an existing workflow.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the expected behavior and the actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal command or Python example and the selected model profile.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, WVision version, backend environment, and relevant package versions.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error and logs
+      description: Include relevant output or backend.log excerpts with private paths and credentials removed.

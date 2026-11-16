@@ -1,0 +1,10 @@
+# Add to the isolated MMDetection backend; never install in the Python 3.12 core.
+-c mmdet-cpu-py310.txt
+mmpretrain==1.2.0
+einops==0.8.2
+mat4py==0.6.0
+modelindex==0.0.2
+model-index==0.1.11
+Markdown==3.10.3
+ordered-set==4.1.0
+click==8.5.1

@@ -30,8 +30,11 @@ dataset validation, experiment tracking, and normalized results.
 The main application uses Python 3.12. YOLO runs in that process; DINOv3 uses an
 isolated Python 3.12 backend. Faster R-CNN, Soft Teacher, and SimSiam use separate
 Python 3.10 backends. Each CUDA environment has its own verified torch build;
-see [GPU setup](docs/GPU.md). Fully unsupervised detection, pose, classification, distributed
-training, export, and optimizer resume are not yet supported. Official
+see [GPU setup](docs/GPU.md). Optimizer-state recovery, explicit mixed precision,
+portable bundles, multi-model/parameter-grid comparison with shared COCO validation,
+and YOLO ONNX export are described in [training operations](docs/TRAINING_OPERATIONS.md).
+The managed DDP launcher still needs actual two-GPU verification. Fully unsupervised
+detection, pose, and classification remain unsupported. Official
 pretrained DINOv3 transfer remains unverified; random and local-fixture execution
 have been checked.
 
@@ -157,6 +160,23 @@ The saved device is reused for validation, test, and prediction. Override it wit
 WVision never silently changes to CPU. See the [GPU example](examples/gpu_semi_supervised.py)
 for SimSiam pretraining followed by semi-supervised transfer.
 
+## Run and compare experiments
+
+After preparing data and the selected backend environments:
+
+```powershell
+python -m pip install -e ".[evaluation]"
+python -m wvision experiments --plan examples/experiments.yaml
+python -m wvision resume --run runs/train-<id> --epochs 50
+python -m wvision bundle --run runs/train-<id> --destination bundles/detector
+```
+
+Plans support multiple models, parameter grids, explicit interpreters, and existing
+runs on the same dataset. Reports include a sortable HTML table, common COCO
+validation metrics, a chart, CSV, configurations, and seed aggregates. Test evaluation
+stays separate. See [training operations](docs/TRAINING_OPERATIONS.md) for mixed
+precision, recovery, optional portable optimizer state/data, ONNX, and backend CI.
+
 ## Learn from unlabeled images
 
 After configuring the [OpenMMLab backend](docs/SEMI_SUPERVISED.md), prepare a
@@ -204,6 +224,7 @@ copies protect source files from backend caches.
 - [Self-supervised pretraining](docs/SELF_SUPERVISED.md)
 - [DINOv3 detection](docs/DINOV3.md)
 - [GPU setup and execution](docs/GPU.md)
+- [Training operations, experiment comparison, bundles, and export](docs/TRAINING_OPERATIONS.md)
 - [Weight compatibility](docs/WEIGHT_COMPATIBILITY.md)
 - [Architecture and code navigation](docs/ARCHITECTURE.md)
 - [Roadmap](docs/MILESTONES.md) and [API migration notes](docs/MIGRATION.md)

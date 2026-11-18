@@ -84,7 +84,7 @@ class Dataset:
         for name in names:
             staged: list[Path] = []
             for index, sample in enumerate(self.splits[name]):
-                image = directory / "data" / name / "images" / f"{index}-{sample.path.name}"
+                image = directory / "data" / name / "images" / f"{index}{sample.path.suffix}"
                 stage_sample(sample, image)
                 staged.append(image)
             file = directory / f"{name}.txt"
@@ -109,7 +109,7 @@ class Dataset:
             images: list[dict[str, Any]] = []
             annotations: list[dict[str, Any]] = []
             for index, sample in enumerate(self.splits[name], 1):
-                image = directory / "data" / name / "images" / f"{index}-{sample.path.name}"
+                image = directory / "data" / name / "images" / f"{index}{sample.path.suffix}"
                 label = stage_sample(sample, image, include_label=name != "train_unlabeled")
                 with Image.open(image) as decoded:
                     width, height = decoded.size

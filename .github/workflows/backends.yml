@@ -1,0 +1,133 @@
+name: Real backend checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      cuda:
+        description: Use a self-hosted Windows CUDA runner (BF16 for DINOv3)
+        type: boolean
+        default: false
+      distributed:
+        description: Also verify two-GPU training and resume (requires cuda)
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: ${{ matrix.backend }} / ${{ inputs.cuda && 'CUDA' || 'CPU' }}
+    runs-on: ${{ inputs.cuda && fromJSON('["self-hosted", "Windows", "X64", "gpu"]') || 'windows-latest' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: yolo
+            python: '3.12'
+          - backend: mmdetection
+            python: '3.10'
+          - backend: dinov3
+            python: '3.12'
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: WForge
+    env:
+      WVISION_TEST_OFFLINE: '1'
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate requested hardware mode
+        run: |
+          if ('${{ inputs.distributed }}' -eq 'true' -and '${{ inputs.cuda }}' -ne 'true') {
+            throw 'Distributed verification requires cuda=true and two GPUs.'
+          }
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install application and test tools
+        run: |
+          python -m venv .wvision/ci-core
+          .wvision/ci-core/Scripts/python -m pip install -e '.[dev,evaluation]'
+          "WVISION_CORE_PYTHON=$((Resolve-Path .wvision/ci-core/Scripts/python.exe).Path)" >> $env:GITHUB_ENV
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install isolated backend
+        run: |
+          python -m venv .wvision/ci-backend
+          $backendPython = (Resolve-Path .wvision/ci-backend/Scripts/python.exe).Path
+          $cuda = '${{ inputs.cuda }}' -eq 'true'
+          switch ('${{ matrix.backend }}') {
+            'yolo' {
+              $wheel = if ($cuda) { 'cu124' } else { 'cpu' }
+              $constraints = if ($cuda) { 'constraints/yolo-cuda-py312.txt' } else { 'constraints/cpu-py312.txt' }
+              & $backendPython -m pip install --index-url "https://download.pytorch.org/whl/$wheel" torch==2.4.1 torchvision==0.19.1
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+              & $backendPython -m pip install -c $constraints -e '.[dev,ultralytics,onnx,evaluation]'
+              "WVISION_TEST_PYTHON=$backendPython" >> $env:GITHUB_ENV
+            }
+            'mmdetection' {
+              $wheel = if ($cuda) { 'cu121' } else { 'cpu' }
+              $mmcv = if ($cuda) { 'cu121/torch2.1' } else { 'cpu/torch2.1.0' }
+              $constraints = if ($cuda) { 'constraints/mmdet-cuda-py310.txt' } else { 'constraints/selfsup-cpu-py310.txt' }
+              & $backendPython -m pip install --index-url "https://download.pytorch.org/whl/$wheel" --extra-index-url https://pypi.org/simple torch==2.1.0 torchvision==0.16.0 numpy==1.26.4 Pillow==10.3.0
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+              & $backendPython -m pip install -c $constraints --only-binary=mmcv --find-links "https://download.openmmlab.com/mmcv/dist/$mmcv/index.html" mmcv==2.1.0 mmengine==0.10.7 mmdet==3.3.0 mmpretrain==1.2.0
+              "WVISION_MMDET_PYTHON=$backendPython" >> $env:GITHUB_ENV
+              "WVISION_TEST_PYTHON=$env:WVISION_CORE_PYTHON" >> $env:GITHUB_ENV
+            }
+            'dinov3' {
+              $wheel = if ($cuda) { 'cu128' } else { 'cpu' }
+              $constraints = if ($cuda) { 'constraints/transformers-cuda-py312.txt' } else { 'constraints/transformers-cpu-py312.txt' }
+              & $backendPython -m pip install --index-url "https://download.pytorch.org/whl/$wheel" --extra-index-url https://pypi.org/simple torch==2.8.0 torchvision==0.23.0 numpy==1.26.4 Pillow==10.3.0
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+              & $backendPython -m pip install -c $constraints transformers==5.22.2 accelerate==1.10.1 safetensors==0.8.0 pycocotools==2.0.11 scipy==1.15.3
+              "WVISION_TRANSFORMERS_PYTHON=$backendPython" >> $env:GITHUB_ENV
+              "WVISION_TEST_PYTHON=$env:WVISION_CORE_PYTHON" >> $env:GITHUB_ENV
+            }
+          }
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $backendPython -m pip check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($cuda) {
+            & $backendPython -c "import torch; assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          "WVISION_TEST_DEVICE=$(if ($cuda) { 'cuda:0' } else { 'cpu' })" >> $env:GITHUB_ENV
+          "WVISION_DISTRIBUTED_BACKEND=${{ matrix.backend }}" >> $env:GITHUB_ENV
+          "WVISION_TEST_DISTRIBUTED=$(if ('${{ inputs.distributed }}' -eq 'true') { '1' } else { '0' })" >> $env:GITHUB_ENV
+      - name: Run actual upstream workflows
+        run: |
+          $marker = switch ('${{ matrix.backend }}') {
+            'yolo' { 'ultralytics' }
+            'mmdetection' { 'mmdetection' }
+            'dinov3' { 'dinov3' }
+          }
+          $select = "integration and ($marker or distributed) and not cuda"
+          & $env:WVISION_TEST_PYTHON -m pytest -q -m $select --basetemp=.wvision/ci-tests --junitxml=.wvision/backend-results.xml
+          exit $LASTEXITCODE
+      - name: Retain reports and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.backend }}-backend-evidence
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            WForge/.wvision/backend-results.xml
+            WForge/.wvision/ci-tests/**/*.log
+            WForge/.wvision/ci-tests/**/status.json
+            WForge/.wvision/ci-tests/**/config.json
+            WForge/.wvision/ci-tests/**/device.json
+            WForge/.wvision/ci-tests/**/metrics.json
+            WForge/.wvision/ci-tests/**/recovery.json
+            WForge/.wvision/ci-tests/**/comparison.json
+            WForge/.wvision/ci-tests/**/comparison.csv
+            WForge/.wvision/ci-tests/**/comparison.html
+            WForge/.wvision/ci-tests/**/export.json

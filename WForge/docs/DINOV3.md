@@ -22,7 +22,7 @@ $env:WVISION_TRANSFORMERS_PYTHON = (Resolve-Path .wvision/transformers-env/Scrip
 
 The [full Windows dependency snapshot](../constraints/windows-transformers-cpu-py312.lock.txt) can replace the constraints file for exact versions. The CPU wheel index is still required for torch/torchvision. It records versions without wheel hashes. The installed backend does not need WVision: the core calls a fixed packaged worker with versioned JSON and no shell. `backend_python=` / `--backend-python` can replace the environment variable and is recorded in the run.
 
-The initial environment is Windows CPU, Python 3.12.3. The current Transformers backbone API requires a newer framework than the earlier integrations; do not upgrade those environments in place. Single-device CUDA is verified in a separate torch 2.8.0+cu128 environment; see [GPU setup](GPU.md). Mixed precision, distributed execution, resume, and export remain unavailable.
+The initial environment is Windows CPU, Python 3.12.3. The current Transformers backbone API requires a newer framework than the earlier integrations; do not upgrade those environments in place. Single-device CUDA is verified in a separate torch 2.8.0+cu128 environment; see [GPU setup](GPU.md). BF16 mixed precision, optimizer-state recovery, portable bundles, and the unverified DDP launcher are described in [training operations](TRAINING_OPERATIONS.md). ONNX export remains unsupported for this adapter.
 
 ## Explicit random-weight smoke test
 
@@ -89,15 +89,15 @@ predictions = model.predict("path/to/image.png")
 restored = Vision.from_run(run.artifact_dir)
 ```
 
-Use a `main()` guard on Windows; [the example](../examples/dinov3_detection.py) includes one. Run paths and backend interpreter references are absolute; relocation is not supported. After training, inference uses the complete detector checkpoint and no longer needs the source backbone directory.
+Use a `main()` guard on Windows; [the example](../examples/dinov3_detection.py) includes one. Original run references are absolute; use [portable bundles](TRAINING_OPERATIONS.md#portable-bundles) for relocation. After training, inference uses the complete detector checkpoint and no longer needs the source backbone directory.
 
 ## Settings, selection, and metrics
 
-Settings: `schema_version` (1), `learning` (`supervised`), `max_iters`, `imgsz`, `batch`, `seed`, `device` (`cpu`), `lr`, `initialization` (`local_backbone` or explicit `random`), and `freeze_backbone` (boolean). Unknown settings fail. Image size is at least 64 and divisible by 32; batch and iteration count are positive integers. Initializer paths are separate `backbone_weights` arguments. `checkpoint` and `pretraining_run` inputs are unsupported for this adapter.
+Settings: `schema_version` (1), `learning` (`supervised`), `max_iters`, `imgsz`, `batch`, `seed`, `device` (`cpu`), `lr`, `initialization` (`local_backbone` or explicit `random`), `freeze_backbone` (boolean), `precision`, `devices`, and `checkpoint_interval`. Unknown settings fail. Image size is at least 64 and divisible by 32; batch and iteration count are positive integers. Initializer paths are separate `backbone_weights` arguments. `checkpoint` and `pretraining_run` inputs are unsupported for this adapter.
 
 The initial recipe uses square resizing and ImageNet RGB normalization, no stochastic augmentation, upstream default DETR dimensions (six encoder and six decoder layers, width 256, 100 queries), AdamW, and a constant learning rate. The full model has 45,537,638 parameters for the one-class fixture. These are integration settings, not a tuned reproduction of a published benchmark.
 
-Validation loss is measured by upstream `Trainer` at the final step and minimized for selection. There is one validation/checkpoint event, so the selected and final checkpoint coincide. This initial version does not select on AP or expose intermediate-validation schedules. It avoids Trainer's unnecessary end-of-run checkpoint reload and uses the upstream compatibility loader for later inference.
+Validation loss is measured by upstream `Trainer` at checkpoint intervals and minimized for selection. `checkpoint_interval` controls intermediate validation/saves; recovery preserves optimizer/scheduler/scaler/RNG state. Selection uses loss, while standalone val/test report AP. The selected and final checkpoint can differ. The two-step smoke profile still evaluates at its final step with default intervals.
 
 `val` and `test` compute official pycocotools bbox AP50:95, AP50, AP75, and area metrics with `maxDets=[1,10,100]`, preserving undefined values as -1. Metrics have a `transformers/coco/` prefix. This setting differs from earlier adapters; do not assume raw cross-backend metrics form a matched benchmark. DETR postprocessing keeps all 100 queries at score threshold zero; COCO ranks detections. Prediction returns the existing JSONL contract: original image size, absolute pixel `xyxy` boxes, scores, zero-based class IDs, and a class map.
 

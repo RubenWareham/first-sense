@@ -58,11 +58,13 @@ Detection starts with a declared COCO-style AP protocol: AP averaged over IoU th
 
 The first adapter preserves structured metrics with an `ultralytics/` prefix. It uses upstream AP, not an official `pycocotools` COCO benchmark. AP75 and per-class tables are not yet exposed in normalized summaries. Evaluation records the evaluator version, image size, batch size, and maximum detections (300), retaining upstream arguments. Full benchmark reporting remains future work.
 
-The [DINOv3/DETR adapter](DINOV3.md) uses `transformers/coco/` AP metrics from pycocotools with `maxDets=[1,10,100]`. Its initial detector checkpoint selection minimizes validation loss, with one event at the final training step; later val/test AP reports do not select a checkpoint. Pretrained-backbone supervision is recorded separately from downstream detection labels. Official pretrained transfer remains unverified until real licensed weights are supplied.
+The [DINOv3/DETR adapter](DINOV3.md) uses `transformers/coco/` AP metrics from pycocotools with `maxDets=[1,10,100]`. Its initial detector checkpoint selection minimizes validation loss, at checkpoint intervals; later val/test AP reports do not select a checkpoint. Pretrained-backbone supervision is recorded separately from downstream detection labels. Official pretrained transfer remains unverified until real licensed weights are supplied.
 
 Declare the checkpoint selection metric and direction before training. Tune thresholds and select checkpoints on validation data. Test uses the selected frozen checkpoint and configuration; repeated test-driven model selection invalidates the held-out claim. Keep validation and test reports distinct.
 
 For each comparison, report dataset/split identity, label budget, pretraining source, model/backbone, image size, augmentation recipe, training steps/epochs, compute/device, seeds, evaluator, and metric settings. Report mean and spread over multiple seeds for quality claims where practical; single-seed runs must say so. Latency results need batch size, precision, hardware, warm-up, synchronization, and whether preprocessing is included.
+
+The multi-model experiment workflow additionally uses one shared `wforge/coco/*` validation protocol across adapters, with explicit score/detection limits and separate native metrics; see [training operations](TRAINING_OPERATIONS.md#multiple-models-and-parameter-grids). Test evaluation is not part of parameter selection.
 
 ## Required run artifacts
 

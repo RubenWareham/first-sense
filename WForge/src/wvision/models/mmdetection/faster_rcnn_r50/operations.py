@@ -15,8 +15,9 @@ from typing import Any
 # Load the packaged framework-free helper without importing the application.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/openmmlab"))
-from devices import record_model_device, runtime_device  # type: ignore[import-not-found]
-from runtime import dependencies, dump  # type: ignore[import-not-found]
+from checkpoints import worker_lock  # type: ignore[import-not-found]
+from devices import record_model_device, runtime_device, runtime_precision, worker_context  # type: ignore[import-not-found]
+from runtime import checkpoint_audit, dependencies, dump, resume_checkpoint  # type: ignore[import-not-found]
 
 
 def resize_pipeline(pipeline: Any, size: int) -> None:
@@ -138,34 +139,43 @@ def configure(request: dict[str, Any], directory: Path) -> Any:
     cfg.test_dataloader = copy.deepcopy(cfg.val_dataloader)
     cfg.val_evaluator = dict(type="CocoMetric", ann_file=request["data"]["val"], metric="bbox")
     cfg.test_evaluator = copy.deepcopy(cfg.val_evaluator)
+    interval = min(settings["checkpoint_interval"], settings["max_iters"])
     cfg.train_cfg = dict(
         type="IterBasedTrainLoop",
         max_iters=settings["max_iters"],
-        val_interval=settings["max_iters"],
+        val_interval=interval,
     )
     cfg.param_scheduler = []
     cfg.optim_wrapper.optimizer.lr = settings["backend_options"].get("lr", 0.01)
+    if settings["precision"] != "fp32":
+        cfg.optim_wrapper.type = "AmpOptimWrapper"
+        cfg.optim_wrapper.dtype = "float16"
+        cfg.optim_wrapper.loss_scale = "dynamic"
     selection = "teacher/coco/bbox_mAP" if semi else "coco/bbox_mAP"
     cfg.default_hooks.checkpoint = dict(
         type="CheckpointHook",
         by_epoch=False,
-        interval=settings["max_iters"],
+        interval=interval,
         save_best=selection,
         rule="greater",
         max_keep_ckpts=1,
-        save_optimizer=False,
-        save_param_scheduler=False,
+        save_optimizer=True,
+        save_param_scheduler=True,
     )
     cfg.default_hooks.logger.interval = 1
     cfg.visualizer.vis_backends = [dict(type="LocalVisBackend")]
-    cfg.work_dir = str(directory / "upstream")
-    cfg.launcher = "none"
-    cfg.env_cfg.dist_cfg = dict(backend="gloo")
+    cfg.work_dir = request.get("upstream_directory", str(directory / "upstream"))
+    cfg.launcher = "pytorch" if request.get("distributed") else "none"
+    cfg.env_cfg.dist_cfg = dict(
+        backend="nccl" if request.get("distributed") and os.name != "nt" else "gloo"
+    )
+    if request.get("distributed"):
+        cfg.model_wrapper_cfg = dict(type="MMDistributedDataParallel", find_unused_parameters=True)
     cfg.env_cfg.mp_cfg = dict(mp_start_method="spawn", opencv_num_threads=0)
     cfg.randomness = dict(seed=settings["seed"], deterministic=True)
-    cfg.load_from = None
-    cfg.resume = False
-    cfg.device = settings["device"]
+    cfg.load_from = resume_checkpoint(request, directory)
+    cfg.resume = bool(request.get("resume"))
+    cfg.device = request.get("execution_device", settings["device"])
     cfg.wvision_imgsz = settings["imgsz"]
     cfg.dump(str(directory / "resolved-mmdet.py"))
     dump(directory / "resolved-mmdet.json", cfg.to_dict())
@@ -176,7 +186,10 @@ def configure(request: dict[str, Any], directory: Path) -> Any:
             "release": "v3.3.0",
             "recipe": recipe.name,
             "recipe_sha256": hashlib.sha256(recipe.read_bytes()).hexdigest(),
-            "initialization": "supervised detector weights"
+            "resume_source": request.get("resume"),
+            "initialization": "optimizer-state resume"
+            if request.get("resume")
+            else "supervised detector weights"
             if detector
             else ("SimSiam backbone; random detection heads" if pretraining else "random"),
             "pretraining_data": pretraining,
@@ -213,13 +226,20 @@ def train(request: dict[str, Any], directory: Path) -> dict[str, Any]:
 
     cfg = configure(request, directory)
     runner = Runner.from_cfg(cfg)
-    record_model_device(runner.model, request["config"]["device"], directory)
+    checkpoint_audit(runner, directory)
+    record_model_device(
+        runner.model, request.get("execution_device", request["config"]["device"]), directory
+    )
     if request.get("pretraining"):
         verify_transfer(runner, request["pretraining"], directory)
     elif request.get("detector"):
         initialize_detector(runner, request, directory)
     runner.train()
-    record_model_device(runner.model, request["config"]["device"], directory)
+    record_model_device(
+        runner.model, request.get("execution_device", request["config"]["device"]), directory
+    )
+    if runner.rank != 0:
+        return {}
     best = Path(runner.message_hub.get_info("best_ckpt"))
     last = Path(runner.work_dir) / f"iter_{request['config']['max_iters']}.pth"
     logs = {
@@ -404,6 +424,15 @@ def inference_model(request: dict[str, Any]) -> Any:
     from mmdet.apis import init_detector
 
     cfg = load_config(request["model_config"])
+    detector = (
+        cfg.model.detector
+        if request.get("learning") == "semi_supervised" or cfg.model.type == "SoftTeacher"
+        else cfg.model
+    )
+    if request.get("score_threshold") is not None:
+        detector.test_cfg.rcnn.score_thr = request["score_threshold"]
+    if request.get("max_detections") is not None:
+        detector.test_cfg.rcnn.max_per_img = request["max_detections"]
     cfg.test_dataloader.dataset.pipeline = [
         item for item in cfg.test_dataloader.dataset.pipeline if item["type"] != "LoadAnnotations"
     ]
@@ -431,8 +460,7 @@ def main() -> None:
     request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     if request.get("schema_version") != 1:
         raise ValueError("Unsupported worker request schema")
-    directory = Path(request["directory"])
-    device = request.get("device", request.get("config", {}).get("device", "cpu"))
+    directory, device = worker_context(request)
     # Used by offline integration tests, inherited by the subprocess boundary.
     if os.environ.get("WVISION_TEST_OFFLINE") == "1":
         import socket
@@ -444,7 +472,8 @@ def main() -> None:
         socket.create_connection = deny_network  # type: ignore[assignment]
     print("WVision: checking backend environment and compiled operators", flush=True)
     dependencies(directory)
-    runtime_device(device, directory)
+    runtime_device(device, directory, requested=request.get("requested_device"))
+    runtime_precision(request.get("config", {}).get("precision", "fp32"), directory)
     import torch
     from mmdet.utils import register_all_modules
 
@@ -459,8 +488,10 @@ def main() -> None:
         result = predict(request, directory)
     else:
         raise ValueError("Unsupported MMDetection operation")
-    dump(Path(sys.argv[2]), {"schema_version": 1, **result})
+    if request.get("rank", 0) == 0:
+        dump(Path(sys.argv[2]), {"schema_version": 1, **result})
 
 
 if __name__ == "__main__":
-    main()
+    with worker_lock(Path(sys.argv[1])):
+        main()

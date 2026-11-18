@@ -1,5 +1,9 @@
 # Verification evidence
 
+[Training operations and real football checks](TRAINING_OPERATIONS.md) records
+recovery, precision, relocation, YOLO ONNX export, and four-candidate comparison,
+including the remaining multi-GPU and hosted-workflow gates.
+
 [First Sense first-commit preparation](FIRST_COMMIT.md) records the current
 source cleanup, package checks, ignore audit, and remaining publication actions.
 

@@ -1,0 +1,15 @@
+schema_version: 1
+data: ../datasets/examples/tiny-detection.yaml
+experiments:
+  - name: yolo-learning-rates
+    model: ../models/detection/yolo11n/smoke.yaml
+    training:
+      backend_options:
+        mosaic: 0.0
+        optimizer: SGD
+    grid:
+      backend_options.lr0: [0.001, 0.01]
+      seed: [0, 1]
+  - name: faster-rcnn
+    model: ../models/detection/faster-rcnn-r50/supervised-smoke.yaml
+    # Set WVISION_MMDET_PYTHON or add backend_python for its isolated environment.

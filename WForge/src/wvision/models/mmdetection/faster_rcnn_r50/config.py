@@ -4,7 +4,7 @@ import math
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from wvision.adapters.shared.devices import canonical_device
+from wvision.adapters.shared.devices import canonical_device, validate_devices, validate_precision
 from wvision.core.config import reject_unknown
 
 MODEL_ID = "mmdetection/faster-rcnn-r50"
@@ -19,6 +19,9 @@ class MMDetConfig:
     batch: int = 2
     seed: int = 0
     device: str = "cpu"
+    precision: str = "fp32"
+    devices: list[int] | None = None
+    checkpoint_interval: int = 100
     backend_options: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -36,6 +39,10 @@ class MMDetConfig:
         if type(self.seed) is not int or self.seed < 0:
             raise ValueError("seed must be a nonnegative integer")
         object.__setattr__(self, "device", canonical_device(self.device))
+        validate_precision(self.precision, self.device, ("fp32", "fp16"))
+        validate_devices(self.devices, self.device)
+        if type(self.checkpoint_interval) is not int or self.checkpoint_interval < 1:
+            raise ValueError("checkpoint_interval must be a positive integer")
         if not isinstance(self.backend_options, dict):
             raise ValueError("backend_options must be a mapping")
         allowed = {

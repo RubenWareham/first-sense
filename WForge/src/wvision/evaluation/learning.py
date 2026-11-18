@@ -35,6 +35,7 @@ def compare_learning(
         raise ValueError("Comparison requires learning=semi_supervised")
     dataset = load_dataset(data, ("train_labeled", "train_unlabeled", "val", "test"))
     executable = interpreter(backend_python)
+    world_size = len(settings.devices or [0])
     budget = load_budget_metadata(dataset)
     reference: str | Path = definition.path if definition else MODEL_ID
     with operation(
@@ -92,9 +93,11 @@ def compare_learning(
                 "max_iters": settings.max_iters,
                 "imgsz": settings.imgsz,
                 "batch": settings.batch,
-                "supervised_labeled_per_iter": settings.batch,
-                "semi_supervised_labeled_per_iter": settings.batch // 2,
-                "semi_supervised_unlabeled_per_iter": settings.batch // 2,
+                "world_size": world_size,
+                "global_batch": settings.batch * world_size,
+                "supervised_labeled_per_iter": settings.batch * world_size,
+                "semi_supervised_labeled_per_iter": settings.batch // 2 * world_size,
+                "semi_supervised_unlabeled_per_iter": settings.batch // 2 * world_size,
                 "supervised_train_seconds": baseline_seconds,
                 "semi_supervised_train_seconds": semi_seconds,
                 "teacher_and_box_jitter_compute": "additional in Soft Teacher",

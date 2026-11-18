@@ -18,7 +18,7 @@ Use the Python 3.12 core and isolated Python 3.10 Windows CPU backend from the [
 $env:WVISION_MMDET_PYTHON = (Resolve-Path .wvision/mmdet-env/Scripts/python.exe).Path
 ```
 
-The backend uses torch 2.1.0+cpu, torchvision 0.16.0+cpu, MMCV 2.1.0, and MMEngine 0.10.7. The complete [Windows dependency snapshot](../constraints/windows-selfsup-cpu-py310.lock.txt) includes both OpenMMLab packages. CPU/MMCV wheel indexes from the setup guide are still required for a fresh installation. This is a version snapshot, without wheel hashes. No packages or weights are downloaded by imports or training. Single-device CUDA is available in a separate [GPU backend environment](GPU.md), including SimSiam-to-Soft Teacher transfer. External raw pretrained weights, distributed execution, and resume are not exposed. Checked Soft Teacher transfer is described in [weight compatibility](WEIGHT_COMPATIBILITY.md).
+The backend uses torch 2.1.0+cpu, torchvision 0.16.0+cpu, MMCV 2.1.0, and MMEngine 0.10.7. The complete [Windows dependency snapshot](../constraints/windows-selfsup-cpu-py310.lock.txt) includes both OpenMMLab packages. CPU/MMCV wheel indexes from the setup guide are still required for a fresh installation. This is a version snapshot, without wheel hashes. No packages or weights are downloaded by imports or training. Single-device CUDA is available in a separate [GPU backend environment](GPU.md), including SimSiam-to-Soft Teacher transfer. External raw pretrained weights remain unsupported. See [training operations](TRAINING_OPERATIONS.md) for mixed precision, optimizer-state recovery, portable bundles, and the unverified DDP boundary. Checked Soft Teacher transfer is described in [weight compatibility](WEIGHT_COMPATIBILITY.md).
 
 ## Commands
 
@@ -47,7 +47,7 @@ wvision test --run runs/train-<id>
 wvision predict --run runs/train-<id> --source .wvision/ssl-budget/test/images
 ```
 
-`--backend-python` is supported on these commands and overrides the environment variable. Run paths contain absolute references; relocation is not supported.
+`--backend-python` is supported on these commands and overrides the environment variable. Original run paths contain absolute references; use [portable bundles](TRAINING_OPERATIONS.md#portable-bundles) for relocation.
 
 ## Python
 
@@ -73,7 +73,7 @@ Use a `main()` guard on Windows; [the complete example](../examples/self_supervi
 
 ## Configuration and transfer contract
 
-Pretraining fields: `schema_version` (1), `max_iters`, `imgsz`, `batch`, `seed`, `device` (`cpu`, `cuda`, or `cuda:N`), and `lr`. Unknown settings fail. Image size is at least 64 and divisible by 32; batch is at least two because SimSiam uses batch normalization. The unlabeled pool must contain at least one batch. The registered model is `mmpretrain/simsiam-r50`; other pretraining models are rejected.
+Pretraining fields: `schema_version` (1), `max_iters`, `imgsz`, `batch`, `seed`, `device` (`cpu`, `cuda`, or `cuda:N`), `precision`, `devices`, `checkpoint_interval`, and `lr`. Unknown settings fail. Image size is at least 64 and divisible by 32; batch is at least two because SimSiam uses batch normalization. The unlabeled pool must contain at least one batch. The registered model is `mmpretrain/simsiam-r50`; other pretraining models are rejected.
 
 The fixed installed recipe is `simsiam_resnet50_8xb32-coslr-200e_in1k.py`. Adaptations are single-device BatchNorm rather than distributed SyncBN, the requested crop size, an iteration budget, a constant learning rate with the upstream SimSiam predictor hook, an infinite sampler, zero loader workers, and a local image-only dataset. Random initialization uses no external pretraining. The final iteration checkpoint is selected without validation or test evaluation. The two-iteration, 64-pixel smoke settings verify execution and are not a recommended accuracy recipe.
 

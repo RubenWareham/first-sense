@@ -49,7 +49,7 @@ OpenMMLab and DINOv3 use `max_iters`.
 The imported training project supports YOLO11n, Faster R-CNN/Soft Teacher,
 SimSiam, and DINOv3 ConvNeXt Tiny/DETR for their documented CPU/single-GPU
 workflows. Official pretrained DINOv3 verification remains pending. Pose,
-classification, runtime integration, export, and fully unsupervised detection are
+classification, runtime integration, and fully unsupervised detection are
 future capabilities; see the [milestones](WForge/docs/MILESTONES.md).
 
 ## Development checks
@@ -73,8 +73,13 @@ Current source layout and supported model combinations are documented in the
 implemented WForge component; future workspace/runtime components remain roadmap
 items, with no placeholder directories.
 
-Run artifacts contain absolute paths. Keep their referenced files available;
-copying a run directory does not provide portable relocation.
+WForge adds optimizer-state resume, explicit mixed precision, parameter-grid/model
+comparisons with common COCO validation, portable bundles, and verified YOLO ONNX
+export. See [training operations](WForge/docs/TRAINING_OPERATIONS.md). Actual
+two-GPU training remains unverified on the one-GPU development machine.
+
+Original runs retain absolute references; use portable bundles when moving runs,
+with optional dataset and optimizer-state copies.
 
 First Sense's original code uses [Apache-2.0](LICENSE); WForge retains the same
 license inside its buildable package.

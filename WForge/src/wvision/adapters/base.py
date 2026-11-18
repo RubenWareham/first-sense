@@ -32,6 +32,14 @@ class ModelSpec:
     capabilities: tuple[Capability, ...]
     notes: str
     initializations: tuple[InitializationRule, ...] = ()
+    exports: tuple[str, ...] = ()
+
+    def require_export(self, format: str) -> None:
+        if format not in self.exports:
+            raise ValueError(
+                f"{self.model_id}: export format {format!r} is not integrated; "
+                f"supported: {self.exports}"
+            )
 
     def require_initialization(
         self,
@@ -86,6 +94,7 @@ class Initialization:
     pretraining_run: Path | None = None
     backbone_weights: Path | None = None
     detector_run: Path | None = None
+    resume_run: Path | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -96,6 +105,7 @@ class Initialization:
                     self.pretraining_run,
                     self.backbone_weights,
                     self.detector_run,
+                    self.resume_run,
                 )
             )
             > 1
@@ -119,6 +129,8 @@ class DetectionContext:
     imgsz: int
     batch: int
     device: str = "cpu"
+    score_threshold: float | None = None
+    max_detections: int | None = None
 
 
 class DetectionAdapter(Protocol):
@@ -165,3 +177,5 @@ class DetectionAdapter(Protocol):
     ) -> dict[str, float]: ...
 
     def predict(self, samples: list[Path], context: DetectionContext, directory: Path) -> int: ...
+
+    def export(self, context: DetectionContext, directory: Path, format: str) -> Path: ...

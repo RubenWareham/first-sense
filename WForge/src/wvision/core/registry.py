@@ -28,6 +28,7 @@ _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
             _detection(("supervised",), ("cpu", "cuda")),
             "Verified Windows CPU/CUDA; random or trusted local YOLO11n initialization",
             (InitializationRule("ultralytics/yolo11n", "checkpoint", "detector", "supervised"),),
+            exports=("onnx",),
         ),
         "wvision.models.ultralytics.yolo11.adapter:create_adapter",
     ),

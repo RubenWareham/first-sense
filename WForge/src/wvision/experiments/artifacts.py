@@ -12,11 +12,28 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+from wvision.adapters.shared.checkpoints import file_lock
+
 
 def write_json(path: Path, value: Any) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     temporary.replace(path)
+
+
+def artifact_reference(directory: Path, value: str, *, strict: bool = True) -> Path:
+    reference = Path(value)
+    resolved = (directory / reference).resolve(strict=strict)
+    if not reference.is_absolute() and not resolved.is_relative_to(directory):
+        raise ValueError("Artifact reference escapes its run directory")
+    return resolved
+
+
+@contextmanager
+def run_lock(directory: Path) -> Iterator[None]:
+    """Reject live writers while permitting recovery after an ungraceful exit."""
+    with file_lock(directory / ".lock"):
+        yield
 
 
 def environment() -> dict[str, Any]:
@@ -54,7 +71,8 @@ def operation(output: str | Path, kind: str, config: dict[str, Any]) -> Iterator
     write_json(directory / "environment.json", environment())
     write_json(directory / "status.json", {"status": "running", "started": started})
     try:
-        yield directory
+        with run_lock(directory):
+            yield directory
     except BaseException as error:
         # Preserve a failure/interruption status, then propagate the original exception.
         write_json(

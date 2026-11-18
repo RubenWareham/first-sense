@@ -326,9 +326,31 @@ examples, and distributions are checked. See the
 [first-commit report](verification/FIRST_COMMIT.md). Actual Git initialization,
 commit/remote/push and first hosted CI result remain publication actions.
 
+## M3m — Training operations and experiment comparison
+
+Requested before Pose. Single-device features verified locally on 2026-11-17;
+actual distributed execution and hosted automation remain open gates.
+
+- [x] Periodic recoverable checkpoints and explicit optimizer-state resume.
+- [x] Explicit per-backend mixed precision with unsupported combinations rejected.
+- [ ] Verify actual distributed multi-GPU training/resume on a two-GPU host.
+- [x] Portable inference/training bundles and verified YOLO ONNX inference export.
+- [x] Configure automated real-backend checks with retained failure artifacts.
+- [ ] Execute the workflow on GitHub and inspect its artifacts.
+- [x] Multi-model and parameter-grid experiments on identical dataset splits,
+  with validation comparison, reproducible settings, and separate final testing.
+
+Export target: ONNX. Multi-GPU execution requires a multi-GPU verification host;
+the current development laptop has one GPU. Preserve the prior model, data, and
+initialization contracts while extending each backend through upstream APIs.
+See the [training-operations verification](verification/TRAINING_OPERATIONS.md)
+and [usage guide](TRAINING_OPERATIONS.md). Real football checks preserve the
+87 labeled / 785 unlabeled / 292 validation / 293 test samples. Short schedules
+verify execution; existing video overlap prevents a generalization claim.
+
 ## M4 — 2D pose estimation
 
-Depends on the detection foundation and completion of the earlier learning-mode assessments.
+Depends on the detection foundation, earlier learning-mode assessments, and M3m.
 
 - [ ] Select an existing pose model/backend; reuse an adapter only where actual capabilities permit it.
 - [ ] Add skeleton, keypoint order, visibility, and coordinate contracts.

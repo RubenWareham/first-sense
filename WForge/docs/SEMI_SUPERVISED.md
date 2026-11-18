@@ -4,7 +4,7 @@ WVision integrates **MMDetection 3.3.0 Soft Teacher with Faster R-CNN R50-FPN**,
 
 The [model catalog](../models/README.md) provides `models/detection/faster-rcnn-r50/soft-teacher-smoke.yaml` for `Vision(model_config)` and for the comparison command's `--model` argument. Independent [dataset examples](../datasets/README.md) can live outside their data root while preserving label-budget metadata. See [weight compatibility](WEIGHT_COMPATIBILITY.md) for checked initialization from supervised detector runs or SimSiam backbones.
 
-This integration supports Windows CPU and explicit single-NVIDIA-GPU execution. Follow the [CUDA setup](GPU.md) for `device="cuda:0"`; CPU remains the default. Distributed training, external raw pretrained initialization, and optimizer-state resume are not exposed for this backend. A separate [self-supervised workflow](SELF_SUPERVISED.md) supports checked local SimSiam backbone transfer into supervised Faster R-CNN and both Soft Teacher branches. Soft Teacher also accepts a completed supervised detector through `detector_run=` / `--detector-run`, with the same dataset and compatible detector structure. The smoke recipe is an execution check, not a reproduction of published accuracy.
+This integration supports Windows CPU and explicit single-NVIDIA-GPU execution. Follow the [CUDA setup](GPU.md) for `device="cuda:0"`; CPU remains the default. External raw pretrained initialization remains unsupported. Mixed precision, optimizer-state recovery, and the unverified managed DDP path are described in [training operations](TRAINING_OPERATIONS.md). A separate [self-supervised workflow](SELF_SUPERVISED.md) supports checked local SimSiam backbone transfer into supervised Faster R-CNN and both Soft Teacher branches. Soft Teacher also accepts a completed supervised detector through `detector_run=` / `--detector-run`, with the same dataset and compatible detector structure. The smoke recipe is an execution check, not a reproduction of published accuracy.
 
 ## Separate environment
 
@@ -45,8 +45,10 @@ Python equivalent:
 from wvision import prepare_label_budget
 
 manifest = prepare_label_budget(
-    ".wvision/semi-source/dataset.yaml", ".wvision/semi-budget",
-    labeled_count=2, seed=0,
+    ".wvision/semi-source/dataset.yaml",
+    ".wvision/semi-budget",
+    labeled_count=2,
+    seed=0,
 )
 ```
 
@@ -64,7 +66,10 @@ Or use Python, with a main guard in Windows scripts:
 ```python
 from wvision import Vision
 
-model = Vision("models/detection/faster-rcnn-r50/soft-teacher-smoke.yaml", backend_python=".wvision/mmdet-env/Scripts/python.exe")
+model = Vision(
+    "models/detection/faster-rcnn-r50/soft-teacher-smoke.yaml",
+    backend_python=".wvision/mmdet-env/Scripts/python.exe",
+)
 run = model.train(".wvision/semi-budget/dataset.yaml")
 validation = model.val()
 test = model.test()
@@ -75,7 +80,7 @@ For this model, explicit `learning=supervised` selects the underlying Faster R-C
 
 MMDetection evaluation and prediction use the selected checkpoint of a completed run. Replacing it with an unrelated checkpoint is rejected before upstream loading. Raw external initialization remains unsupported. Local SimSiam transfer uses `pretraining_run`; a completed supervised detector uses `detector_run`. Both have separate checked source contracts and cannot be combined.
 
-Configuration fields: `schema_version` (1), `learning`, `max_iters`, `imgsz`, `batch`, `seed`, `device`, `backend_options`. Image size is a multiple of 32, at least 64; batch is even and at least 2. The supervised run uses the full batch as labeled images. Soft Teacher uses a 1:1 labeled/unlabeled source ratio, with weak/strong views from upstream pipelines.
+Configuration fields: `schema_version` (1), `learning`, `max_iters`, `imgsz`, `batch`, `seed`, `device`, `precision`, `devices`, `checkpoint_interval`, `backend_options`. Image size is a multiple of 32, at least 64; batch is even and at least 2. The supervised run uses the full batch as labeled images. Soft Teacher uses a 1:1 labeled/unlabeled source ratio, with weak/strong views from upstream pipelines.
 
 Backend options expose `lr` and upstream semi-supervised settings `pseudo_label_initial_score_thr`, `rpn_pseudo_thr`, `cls_pseudo_thr`, and `reg_pseudo_thr`. The latter settings require semi-supervised mode. Defaults retain upstream pseudo-label thresholds. The smoke recipe lowers score thresholds to exercise pseudo-label losses with random weights, uses a very small learning rate, two iterations, and 128-pixel inputs. These thresholds and schedule are not accuracy recommendations.
 
@@ -99,7 +104,7 @@ The [recorded smoke comparison](verification/SOFT_TEACHER.md) publishes the actu
 
 The core saves the standard dataset/config/status/environment/checkpoint artifacts. Each backend call adds `backend-request.json`, `backend-result.json`, `backend.log`, and `backend-environment.json`. Logs preserve upstream messages without scraping them as the metrics API.
 
-Standalone evaluation calls upstream inference and `CocoMetric` directly, preserving the selected COCO image IDs without constructing a training runner. Training still uses upstream `Runner` and `TeacherStudentValLoop`. Checkpoints omit optimizer/scheduler state because resume is not exposed. Worker cancellation terminates the owned Windows process tree, including virtual-environment redirector children.
+Standalone evaluation calls upstream inference and `CocoMetric` directly, preserving the selected COCO image IDs without constructing a training runner. Training still uses upstream `Runner` and `TeacherStudentValLoop`. New recovery checkpoints retain optimizer/scheduler state for explicit resume. Worker cancellation terminates the owned Windows process tree, including virtual-environment redirector children.
 
 Operations sharing an output root reuse `.mmdet-matplotlib-cache` for font discovery. This cache contains no samples, annotations, or metrics. Dataset snapshots and upstream annotation caches remain isolated per operation.
 

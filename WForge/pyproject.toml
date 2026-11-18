@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=77", "packaging>=24.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,6 +22,8 @@ dependencies = ["PyYAML>=6.0.2,<7", "Pillow>=10.3,<12"]
 
 [project.optional-dependencies]
 ultralytics = ["ultralytics==8.3.4"]
+onnx = ["onnx==1.17.0", "onnxruntime==1.20.1"]
+evaluation = ["pycocotools==2.0.11"]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<3", "types-PyYAML", "types-Pillow", "build>=1.2,<2"]
 
 [project.scripts]
@@ -35,6 +37,8 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 addopts = "-m 'not integration'"
 markers = [
+    "ultralytics: actual in-process YOLO backend required",
+    "distributed: actual multi-GPU upstream training; explicitly selected",
     "cuda: actual single-NVIDIA-GPU execution; explicitly selected",
     "integration: real upstream execution; explicitly selected",
     "mmdetection: isolated upstream MMDetection environment required",
@@ -54,7 +58,7 @@ strict = true
 files = ["src/wvision"]
 
 [[tool.mypy.overrides]]
-module = ["torch.*", "ultralytics.*", "mmcv.*", "mmdet.*", "mmengine.*", "mmpretrain.*",
-          "transformers.*", "safetensors.*", "pycocotools.*"]
+module = ["torch.*", "torchvision.*", "ultralytics.*", "mmcv.*", "mmdet.*", "mmengine.*", "mmpretrain.*",
+          "transformers.*", "safetensors.*", "pycocotools.*", "onnx.*", "onnxruntime.*", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"

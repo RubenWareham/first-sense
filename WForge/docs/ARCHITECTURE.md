@@ -76,6 +76,10 @@ adapter registration explicit; no runtime plugin discovery or empty task scaffol
 | Dataset checks/conversion | `datasets/detection.py` |
 | Labeled/unlabeled budget generation | `datasets/budgets.py` |
 | Representation pretraining | `training/pretraining.py` |
+| Optimizer-state recovery and continuation | `training/recovery.py` |
+| Multi-model / parameter-grid experiments | `experiments/comparison.py` |
+| Portable run bundles | `experiments/portable.py` |
+| Shared cross-model COCO validation | `evaluation/detection.py` |
 | Supervised/semi-supervised comparison | `evaluation/learning.py` |
 | Random/pretrained comparison | `evaluation/pretraining.py` |
 | Status, environment, artifact writing | `experiments/artifacts.py` |
@@ -118,11 +122,11 @@ forwarding modules or duplicate implementations are retained.
 
 | Operation | Responsibility |
 | --- | --- |
-| `train` | Validate request, select adapter, start an upstream training run; resume is unsupported |
+| `train` | Validate request, select adapter, start an upstream training run or explicit checked continuation |
 | `val` | Evaluate the validation split for development and selection |
 | `test` | Evaluate the explicit test split using an already selected checkpoint |
 | `predict` | Return task-specific predictions and optional saved outputs |
-| `export` | Later capability; expose only formats tested for that adapter |
+| `export` | Verified YOLO ONNX export; other formats/adapters fail clearly |
 
 Use `val` consistently in Python and CLI. A CLI command should only parse arguments, invoke application logic, and format the result. It must not implement its own training behavior.
 

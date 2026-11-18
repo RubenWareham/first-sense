@@ -11,6 +11,7 @@ from wvision.datasets.detection import load_dataset, sha256, stage_sample
 from wvision.experiments.artifacts import operation, write_json
 from wvision.models.mmpretrain.simsiam_r50.adapter import invoke
 from wvision.models.mmpretrain.simsiam_r50.config import MODEL_ID, PretrainConfig
+from wvision.training.recovery import resolve_resume, stage_resume
 
 
 def pretrain(
@@ -18,6 +19,7 @@ def pretrain(
     *,
     model: str | Path = MODEL_ID,
     backend_python: str | Path | None = None,
+    resume_run: str | Path | None = None,
     output: str | Path = "runs",
     **overrides: Any,
 ) -> PretrainResult:
@@ -32,6 +34,11 @@ def pretrain(
     if len(samples) < settings.batch:
         raise ValueError("train_unlabeled must contain at least batch images")
     executable = interpreter(backend_python)
+    source = (
+        resolve_resume(resume_run, model_id, dataset.fingerprint, settings.to_dict())
+        if resume_run
+        else None
+    )
     with operation(
         output,
         "pretrain",
@@ -42,13 +49,24 @@ def pretrain(
             "backend_python": str(executable),
         },
     ) as directory:
+        write_json(
+            directory / "training.json",
+            {
+                "schema_version": 1,
+                "model": model_id,
+                "data": str(dataset.manifest),
+                "dataset_fingerprint": dataset.fingerprint,
+                "config": settings.to_dict(),
+                "backend_python": str(executable),
+            },
+        )
         write_json(directory / "dataset.json", dataset.snapshot())
         if definition is not None:
             definition.assert_unchanged()
             write_json(directory / "model-definition.json", definition.snapshot())
         staged = []
         for index, sample in enumerate(samples):
-            image = directory / "data/train_unlabeled/images" / f"{index}-{sample.path.name}"
+            image = directory / "data/train_unlabeled/images" / f"{index}{sample.path.suffix}"
             stage_sample(sample, image, include_label=False)
             staged.append(image.name)
         listing = directory / "images.txt"
@@ -60,6 +78,7 @@ def pretrain(
                 "operation": "pretrain",
                 "config": settings.to_dict(),
                 "images": str(listing),
+                **({"resume": stage_resume(source, directory)} if source else {}),
             },
         )
         checkpoint = Path(result["checkpoint"]).resolve(strict=True)

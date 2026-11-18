@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from wvision.adapters.shared.devices import canonical_device
+from wvision.adapters.shared.devices import canonical_device, validate_devices, validate_precision
 from wvision.core.config import reject_unknown
 from wvision.datasets.detection import sha256
 
@@ -20,6 +20,9 @@ class DinoDETRConfig:
     batch: int = 2
     seed: int = 0
     device: str = "cpu"
+    precision: str = "fp32"
+    devices: list[int] | None = None
+    checkpoint_interval: int = 100
     lr: float = 0.0001
     initialization: str = "local_backbone"
     freeze_backbone: bool = True
@@ -37,6 +40,10 @@ class DinoDETRConfig:
         if type(self.seed) is not int or self.seed < 0:
             raise ValueError("seed must be a nonnegative integer")
         object.__setattr__(self, "device", canonical_device(self.device))
+        validate_precision(self.precision, self.device, ("fp32", "bf16"))
+        validate_devices(self.devices, self.device)
+        if type(self.checkpoint_interval) is not int or self.checkpoint_interval < 1:
+            raise ValueError("checkpoint_interval must be a positive integer")
         if type(self.lr) not in (int, float) or not math.isfinite(self.lr) or self.lr <= 0:
             raise ValueError("lr must be finite and positive")
         if self.initialization not in ("local_backbone", "random"):

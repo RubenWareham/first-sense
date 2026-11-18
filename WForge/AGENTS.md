@@ -8,6 +8,12 @@ This repository implements supervised YOLO11n, an isolated MMDetection Soft Teac
 
 ## Read before changing code
 
+Training operations now include explicit recovery, precision settings, portable
+bundles, shared-COCO experiment comparison, and verified YOLO ONNX export. Read
+[training operations](docs/TRAINING_OPERATIONS.md) for current per-backend limits.
+Actual multi-GPU execution remains an open verification gate; do not report a
+launcher, rank-isolation test, or skipped GPU test as real distributed verification.
+
 1. Read this file and [engineering rules](docs/ENGINEERING.md).
 2. Read [architecture](docs/ARCHITECTURE.md) and [data and evaluation rules](docs/DATA_AND_EVALUATION.md).
 3. For backend work, read [integration rules](docs/INTEGRATIONS.md).

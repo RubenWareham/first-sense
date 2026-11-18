@@ -47,6 +47,8 @@ class DinoDETRAdapter:
 
     def validate_training(self, settings: DetectionSettings, inputs: Initialization) -> None:
         assert isinstance(settings, DinoDETRConfig)
+        if inputs.resume_run:
+            return
         if inputs.detector_run is not None:
             raise ValueError("DINOv3/DETR does not support detector_run initialization")
         if inputs.checkpoint is not None or inputs.pretraining_run is not None:
@@ -134,9 +136,15 @@ class DinoDETRAdapter:
                     "model_config": str(context.model_config),
                     "imgsz": context.imgsz,
                     "source": [str(path) for path in samples],
+                    "score_threshold": context.score_threshold,
+                    "max_detections": context.max_detections,
                 },
             )["sample_count"]
         )
+
+    def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
+        self.spec.require_export(format)
+        raise ValueError("DINOv3/DETR inference export is not verified")
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

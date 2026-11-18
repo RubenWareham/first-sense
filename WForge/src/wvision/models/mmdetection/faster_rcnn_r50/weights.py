@@ -5,10 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from wvision.datasets.detection import Dataset, sha256
+from wvision.experiments.artifacts import artifact_reference
+from wvision.experiments.portable import verify_bundle
 
 
 def detector_source(run: Path, dataset: Dataset, backbone_style: str) -> dict[str, Any]:
     directory = run.resolve(strict=True)
+    verify_bundle(directory)
     state = json.loads((directory / "run.json").read_text(encoding="utf-8"))
     status = json.loads((directory / "status.json").read_text(encoding="utf-8"))
     if (
@@ -33,8 +36,8 @@ def detector_source(run: Path, dataset: Dataset, backbone_style: str) -> dict[st
     environment = json.loads((directory / "backend-environment.json").read_text(encoding="utf-8"))
     if environment.get("packages", {}).get("mmdet") != "3.3.0":
         raise ValueError("Detector source requires the verified mmdet==3.3.0 backend")
-    checkpoint = Path(state["best_checkpoint"]).resolve(strict=True)
-    config = Path(state["model_config"]).resolve(strict=True)
+    checkpoint = artifact_reference(directory, state["best_checkpoint"])
+    config = artifact_reference(directory, state["model_config"])
     if sha256(checkpoint) != state["best_checkpoint_sha256"]:
         raise ValueError("Detector source checkpoint content has changed")
     if sha256(config) != state["model_config_sha256"]:

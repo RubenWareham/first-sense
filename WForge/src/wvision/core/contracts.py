@@ -52,3 +52,18 @@ class TransferComparisonResult:
     random_run: Path
     pretrained_run: Path
     report: Path
+
+
+@dataclass(frozen=True)
+class ExperimentResult:
+    artifact_dir: Path
+    report: Path
+    table: Path
+    html: Path
+
+
+@dataclass(frozen=True)
+class ExportResult:
+    artifact_dir: Path
+    model: Path
+    manifest: Path

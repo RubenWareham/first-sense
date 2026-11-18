@@ -19,8 +19,7 @@ Each backend keeps its own compatible environment:
 | Faster R-CNN / Soft Teacher / SimSiam, isolated worker | 3.10 | 2.1.0 / 0.16.0 | `cu121` |
 
 Do not replace one environment's torch packages to satisfy another backend.
-Distributed training, mixed precision, automatic batch sizing, optimizer resume,
-and arbitrary backbone substitution remain unsupported. DINOv3's official
+Mixed precision and optimizer-state resume are described in [training operations](TRAINING_OPERATIONS.md). The managed DDP launcher requires actual two-GPU verification; single-GPU checks do not establish that support. Automatic batch sizing and arbitrary backbone substitution remain unsupported. DINOv3's official
 pretrained-weight verification is still pending; CUDA checks use random weights
 and owned local-backbone fixtures.
 
@@ -68,7 +67,7 @@ visible device. Transformers therefore cannot start automatic multi-GPU
 DataParallel. `device.json` records the original `requested` index and selected visibility mask;
 its `execution_device` and parameter placement use the worker-local `cuda:0`.
 Image inputs and postprocessing tensors are placed on that same device.
-Inherited distributed-launch settings are rejected instead of starting extra processes.
+External distributed-launch settings are rejected; use the managed `devices` interface for the unverified DDP path.
 `examples/dinov3_detection.py` accepts `--device` and `--backend-python` as well.
 Create its `.wvision/dinov3-data` example dataset before running it.
 
@@ -144,9 +143,7 @@ def main():
         device="cuda:0",
     )
     model = Vision("models/detection/faster-rcnn-r50/soft-teacher-pytorch-smoke.yaml")
-    run = model.train(
-        data, device="cuda:0", pretraining_run=representation.artifact_dir
-    )
+    run = model.train(data, device="cuda:0", pretraining_run=representation.artifact_dir)
     print(run.artifact_dir)
     print(model.val().metrics)
     print(model.test().metrics)
@@ -177,9 +174,7 @@ To use a CUDA-trained detector in a CPU-only backend, explicitly select both the
 backend interpreter and execution device:
 
 ```python
-model = Vision.from_run(
-    "runs/train-<id>", backend_python=".wvision/mmdet-env/Scripts/python.exe"
-)
+model = Vision.from_run("runs/train-<id>", backend_python=".wvision/mmdet-env/Scripts/python.exe")
 predictions = model.predict("path/to/image.png", device="cpu")
 ```
 
@@ -197,7 +192,7 @@ operation or driver-VRAM measurement: upstream logging can reset peak counters.
 An initialization audit checks source tensor equality before training, including
 when loaded weights and model parameters reside on different devices.
 
-Training uses upstream optimizers with FP32 weights and AMP disabled. No custom training loop or precision policy is introduced.
+FP32 remains the default. Explicit AMP settings use upstream training APIs, with requested precision recorded in configuration and device audits; see [precision settings](TRAINING_OPERATIONS.md#mixed-precision).
 Deterministic settings and CUDA BLAS workspace configuration are recorded/applied,
 but CPU and GPU runs are not claimed to be bitwise identical. Memory requirements
 depend on images, batch, proposals, and method. Out-of-memory errors preserve the

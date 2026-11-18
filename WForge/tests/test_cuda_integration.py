@@ -83,7 +83,7 @@ def test_cuda_simsiam_to_soft_teacher(manifest: Path, tmp_path: Path, cuda_backe
     restored = Vision.from_run(trained.artifact_dir)
     check_cuda(restored.val(output=output).artifact_dir, {"teacher", "student"})
     check_cuda(restored.test(output=output).artifact_dir, {"teacher", "student"})
-    sample = data.parent / "test/images/0-test-0.png"
+    sample = data.parent / "test/images/0.png"
     predicted = restored.predict(sample, output=output)
     assert predicted.sample_count == 1
     check_cuda(predicted.artifact_dir, {"teacher", "student"})

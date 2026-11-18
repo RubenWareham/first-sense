@@ -124,7 +124,7 @@ def test_real_initialized_soft_teacher(
     model = Vision.from_run(directory)
     assert model.val(output=output).metrics["mmdetection/coco/bbox_mAP"] >= 0
     assert model.test(output=output).metrics["mmdetection/coco/bbox_mAP"] >= 0
-    sample = data.parent / "test/images/0-test-0.png"
+    sample = data.parent / "test/images/0.png"
     assert model.predict(sample, output=output).sample_count == 1
     if style != "caffe":
         return

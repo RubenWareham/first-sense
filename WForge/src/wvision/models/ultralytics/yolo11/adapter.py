@@ -1,5 +1,6 @@
 """Ultralytics implementation of the shared detection adapter contract."""
 
+import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from wvision.adapters.base import (
     ModelSpec,
     TrainingOutput,
 )
+from wvision.adapters.shared.process import invoke_worker
 from wvision.datasets.detection import Dataset, sha256
 from wvision.models.ultralytics.yolo11 import operations as yolo
 from wvision.models.ultralytics.yolo11.config import TrainConfig
@@ -76,8 +78,30 @@ class UltralyticsDetection:
         directory: Path,
     ) -> TrainingOutput:
         assert isinstance(settings, TrainConfig)
-        checkpoint = Path(initialization["checkpoint"]) if initialization["checkpoint"] else None
-        result = yolo.train(checkpoint, dataset.write_upstream(directory), settings, directory)
+        if settings.devices:
+            result = invoke_worker(
+                Path(sys.executable),
+                Path(__file__).with_name("worker.py"),
+                directory,
+                {
+                    "operation": "train",
+                    "config": settings.to_dict(),
+                    "data": str(dataset.write_upstream(directory)),
+                    **initialization,
+                },
+                "YOLO DDP",
+            )
+            return TrainingOutput(Path(result["best"]), Path(result["last"]), result["metrics"])
+        checkpoint = (
+            Path(initialization["checkpoint"]) if initialization.get("checkpoint") else None
+        )
+        result = yolo.train(
+            checkpoint,
+            dataset.write_upstream(directory),
+            settings,
+            directory,
+            **({"resume": initialization["resume"]} if initialization.get("resume") else {}),
+        )
         return TrainingOutput(Path(result["best"]), Path(result["last"]), result["metrics"])
 
     def evaluate(
@@ -94,13 +118,23 @@ class UltralyticsDetection:
         )
 
     def predict(self, samples: list[Path], context: DetectionContext, directory: Path) -> int:
+        options = {}
+        if context.score_threshold is not None:
+            options["conf"] = context.score_threshold
+        if context.max_detections is not None:
+            options["max_det"] = context.max_detections
         return yolo.predict(
             context.checkpoint,
             [str(path) for path in samples],
             directory,
             context.imgsz,
             device=context.device,
+            **options,
         )
+
+    def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
+        self.spec.require_export(format)
+        return yolo.export(context.checkpoint, context.imgsz, directory)
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

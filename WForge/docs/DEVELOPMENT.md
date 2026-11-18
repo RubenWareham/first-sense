@@ -42,7 +42,7 @@ This section describes the Ultralytics adapter. The [semi-supervised guide](SEMI
 
 `Vision("models/detection/yolo11n/smoke.yaml")` selects a registered model plus its defaults through the [model-config schema](../models/README.md). On that instance, resolution is adapter defaults → model `training` section → explicit overrides. `backend_options` is replaced as a whole at each layer. The [dataset catalog](../datasets/README.md) supplies independent manifests and preparation steps. Registered-ID selection remains supported; flat settings files and `config=` / `--config` have been removed. See [migration notes](MIGRATION.md).
 
-Settings: `schema_version` (1), `learning`, `epochs`, `imgsz`, `batch`, `seed`, `device`, `backend_options`. `learning=supervised` is supported with `device=cpu`, `cuda`, or `cuda:N`. CUDA requires the separately documented GPU environment; there is no automatic CPU fallback. Image size must be at least 64 and divisible by 32; training batch must be at least 2. See the [smoke recipe](../models/detection/yolo11n/smoke.yaml).
+Settings: `schema_version` (1), `learning`, `epochs`, `imgsz`, `batch`, `seed`, `device`, `precision`, `devices`, `checkpoint_interval`, `backend_options`. See [training operations](TRAINING_OPERATIONS.md) for recovery, mixed precision, and the unverified multi-GPU boundary. `learning=supervised` is supported with `device=cpu`, `cuda`, or `cuda:N`. CUDA requires the separately documented GPU environment; there is no automatic CPU fallback. Image size must be at least 64 and divisible by 32; training batch must be at least 2. See the [smoke recipe](../models/detection/yolo11n/smoke.yaml).
 
 Backend options currently exposed: `lr0`, `patience`, `mosaic`, `mixup`, `degrees`, `fliplr`, `optimizer`. Other fields fail so they cannot override split selection or output ownership. Upstream semantics still apply; for example, its automatic optimizer can choose its own learning rate. The upstream `args.yaml` records its settings.
 
@@ -58,9 +58,9 @@ Training adds `model-source.json`, the bundled `upstream-model.yaml`, `metrics.j
 
 Validation and test add namespaced upstream metrics. Test inputs are passed as `val` in a separate upstream evaluation config; WVision records the operation as `test`. The training config contains neither test nor unlabeled inputs.
 
-Prediction writes input hashes and `predictions.jsonl`. Inputs are local PNG/JPEG files or a non-recursive directory. URLs, video, streams, and export are not exposed. Records are written incrementally, but the upstream image-list loader may hold images in memory; this is not a bounded-memory guarantee.
+Prediction writes input hashes and `predictions.jsonl`. Inputs are local PNG/JPEG files or a non-recursive directory. URLs, video, and streams are not exposed. Verified YOLO ONNX export is described in [training operations](TRAINING_OPERATIONS.md). Records are written incrementally, but the upstream image-list loader may hold images in memory; this is not a bounded-memory guarantee.
 
-Failed/interrupted operations retain their files and record the error type. There is no automatic cleanup or resume. References are absolute paths; portable relocation of runs is deferred.
+Failed/interrupted operations retain their files and record the error type. Recovery is explicit through `resume`; original runs retain absolute references. Use [portable bundles](TRAINING_OPERATIONS.md#portable-bundles) for relocation. There is no automatic cleanup.
 
 ## Backend boundary
 

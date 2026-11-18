@@ -60,7 +60,7 @@ def prepare_label_budget(
         for name, samples in pools.items():
             listing = []
             for index, sample in enumerate(samples):
-                image = target / name / "images" / f"{index}-{sample.path.name}"
+                image = target / name / "images" / f"{index}{sample.path.suffix}"
                 stage_sample(sample, image, include_label=name != "train_unlabeled")
                 listing.append(image.relative_to(target).as_posix())
             split_file = target / f"{name}.txt"

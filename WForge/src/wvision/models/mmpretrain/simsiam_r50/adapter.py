@@ -6,6 +6,8 @@ from typing import Any
 
 from wvision.adapters.shared.process import invoke_worker
 from wvision.datasets.detection import sha256
+from wvision.experiments.artifacts import artifact_reference
+from wvision.experiments.portable import verify_bundle
 from wvision.models.mmpretrain.simsiam_r50.config import MODEL_ID
 
 
@@ -18,6 +20,7 @@ def invoke(python: Path, directory: Path, request: dict[str, Any]) -> dict[str, 
 def load_pretraining(run: str | Path, fingerprint: str) -> dict[str, Any]:
     """Only transfer a completed, untampered WVision SimSiam run on this dataset."""
     directory = Path(run).resolve(strict=True)
+    verify_bundle(directory)
     state = json.loads((directory / "run.json").read_text(encoding="utf-8"))
     status = json.loads((directory / "status.json").read_text(encoding="utf-8"))
     if (
@@ -29,7 +32,7 @@ def load_pretraining(run: str | Path, fingerprint: str) -> dict[str, Any]:
         raise ValueError("Expected a completed WVision SimSiam pretraining run")
     if state["dataset_fingerprint"] != fingerprint:
         raise ValueError("Pretraining dataset identity differs from downstream dataset")
-    checkpoint = Path(state["checkpoint"]).resolve(strict=True)
+    checkpoint = artifact_reference(directory, state["checkpoint"])
     if sha256(checkpoint) != state["checkpoint_sha256"]:
         raise ValueError("Pretraining checkpoint content has changed")
-    return {"run": str(directory), **state}
+    return {"run": str(directory), **state, "checkpoint": str(checkpoint)}

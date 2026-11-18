@@ -25,6 +25,10 @@ wvision prepare-budget --data datasets/examples/tiny-detection.yaml --destinatio
 
 No example downloads external datasets, copies withheld training labels into the unlabeled pool, or generates data during import or model construction. Destinations must be new; existing data is never silently overwritten.
 
+Generated data copies use numbered filenames with the original image extension
+to keep long source names from exceeding Windows path limits. Source files remain
+unchanged; dataset snapshots and label-budget metadata retain source identities.
+
 ## Your own dataset
 
 Copy either [the supervised template](templates/yolo-detection.yaml) or [the semi-supervised template](templates/semi-supervised-detection.yaml). Set its `root` relative to the copied manifest's location, replace class names, and supply the listed split files. Templates are not runnable until those files exist.

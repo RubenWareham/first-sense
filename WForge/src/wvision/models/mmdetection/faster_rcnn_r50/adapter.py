@@ -42,7 +42,9 @@ class MMDetection:
 
     def validate_training(self, settings: DetectionSettings, inputs: Initialization) -> None:
         if inputs.checkpoint is not None:
-            raise ValueError("MMDetection checkpoint initialization/resume is not yet exposed")
+            raise ValueError(
+                "MMDetection initialization uses detector_run; recovery uses resume_run"
+            )
         if inputs.backbone_weights is not None:
             raise ValueError("MMDetection backbone transfer uses pretraining_run")
         if inputs.pretraining_run is not None:
@@ -137,9 +139,17 @@ class MMDetection:
                 "checkpoint": str(context.checkpoint),
                 "model_config": str(context.model_config),
                 "source": [str(path) for path in samples],
+                "score_threshold": context.score_threshold,
+                "max_detections": context.max_detections,
             },
         )
         return int(result["sample_count"])
+
+    def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
+        self.spec.require_export(format)
+        raise ValueError(
+            "MMDetection inference export requires a verified upstream deployment adapter"
+        )
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

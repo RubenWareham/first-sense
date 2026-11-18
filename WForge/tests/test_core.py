@@ -9,7 +9,7 @@ import yaml
 
 from wvision import Vision
 from wvision.adapters.ultralytics import backend as adapter
-from wvision.datasets.detection import load_dataset
+from wvision.datasets.detection import load_dataset, sha256
 from wvision.experiments.artifacts import environment, operation
 from wvision.models.ultralytics.yolo11 import operations
 from wvision.models.ultralytics.yolo11.config import TrainConfig
@@ -87,7 +87,7 @@ def test_data_fingerprint_and_training_excludes_test(manifest: Path, tmp_path: P
     config = yaml.safe_load(target.read_text())
     assert "test" not in config
     assert all(
-        "train_labeled" in Path(line).name
+        "train_labeled" in Path(line).parts
         for line in (tmp_path / "train_labeled.txt").read_text().splitlines()
     )
     (manifest.parent / "labels/train_labeled-0.txt").write_text("", encoding="utf-8")
@@ -99,8 +99,36 @@ def test_test_evaluation_uses_test_list(manifest: Path, tmp_path: Path) -> None:
     generated = dataset.write_upstream(tmp_path, "test")
     config = yaml.safe_load(generated.read_text())
     assert Path(config["val"]).name == "test.txt"
-    assert "test-0.png" in Path(config["val"]).read_text()
-    assert "val-0.png" not in Path(config["val"]).read_text()
+    staged = [Path(line) for line in Path(config["val"]).read_text().splitlines()]
+    assert [sha256(path) for path in staged] == [s.image_hash for s in dataset.splits["test"]]
+
+
+@pytest.mark.parametrize("format", ["yolo", "coco"])
+def test_staging_long_source_names(manifest: Path, tmp_path: Path, format: str) -> None:
+    original = manifest.parent / "images/val-0.png"
+    # The source fits Windows' legacy path limit; adding run folders must not
+    # make a valid source filename unusable in an upstream snapshot.
+    long_name = "v" * min(180, 225 - len(str(original.parent))) + ".png"
+    renamed = original.with_name(long_name)
+    original.rename(renamed)
+    (manifest.parent / "labels/val-0.txt").rename(
+        manifest.parent / "labels" / renamed.with_suffix(".txt").name
+    )
+    listing = manifest.parent / "splits/val.txt"
+    listing.write_text(listing.read_text().replace(original.name, long_name), encoding="utf-8")
+    dataset = load_dataset(manifest, ("val",))
+    target = tmp_path / ("nested-" * 6)
+    target.mkdir()
+    if format == "yolo":
+        dataset.write_upstream(target, "val")
+    else:
+        dataset.write_coco(target, ("val",))
+    images = sorted((target / "data/val/images").iterdir())
+    assert [sha256(path) for path in images] == [s.image_hash for s in dataset.splits["val"]]
+    assert renamed.is_file()
+    for image, sample in zip(images, dataset.splits["val"], strict=True):
+        label = image.parent.parent / "labels" / image.with_suffix(".txt").name
+        assert sha256(label) == sample.label_hash
 
 
 def test_staging_preserves_originals_and_checks_changes(manifest: Path, tmp_path: Path) -> None:

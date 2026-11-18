@@ -14,6 +14,9 @@ WVision integrates optional upstream packages without copying their model/traini
 | OpenMMLab PyTorch / torchvision | 2.1.0 / 0.16.0 CPU or CUDA 12.1 | [PyTorch license](https://github.com/pytorch/pytorch/blob/v2.1.0/LICENSE), [torchvision license](https://github.com/pytorch/vision/blob/v0.16.0/LICENSE) |
 | Transformers | 5.22.2 | [Release license](https://github.com/huggingface/transformers/blob/v5.22.2/LICENSE), Apache-2.0 |
 | Accelerate | 1.10.1 | [Release license](https://github.com/huggingface/accelerate/blob/v1.10.1/LICENSE), Apache-2.0 |
+| ONNX (optional export) | 1.17.0 | [Release license](https://github.com/onnx/onnx/blob/v1.17.0/LICENSE), Apache-2.0 |
+| ONNX Runtime (optional verification) | 1.20.1 | [Release license](https://github.com/microsoft/onnxruntime/blob/v1.20.1/LICENSE), MIT |
+| pycocotools (optional shared evaluation) | 2.0.11 | [COCO API license](https://github.com/cocodataset/cocoapi/blob/master/license.txt) |
 | DINOv3 backend PyTorch / torchvision | 2.8.0 / 0.23.0 CPU | [PyTorch license](https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE), [torchvision license](https://github.com/pytorch/vision/blob/v0.23.0/LICENSE) |
 | Optional official DINOv3 weights | User-supplied local ConvNeXt Tiny | [Meta DINOv3 License](https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md); not downloaded, bundled, or verified here |
 

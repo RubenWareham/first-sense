@@ -32,13 +32,20 @@ def check_dependency() -> None:
 
 
 @contextmanager
-def backend(device: str | None = None, directory: Path | None = None) -> Iterator[Any]:
+def backend(
+    device: str | None = None,
+    directory: Path | None = None,
+    *,
+    managed_distributed: bool = False,
+    requested_device: str | None = None,
+) -> Iterator[Any]:
     """Disable upstream networking/loggers without changing installed upstream source.
 
     Scoped overrides affect process globals, so WVision serializes its own backend calls.
     Applications using Ultralytics concurrently should isolate WVision in another process.
     """
-    require_single_process()
+    if not managed_distributed:
+        require_single_process()
     check_dependency()
     with _LOCK, ExitStack() as stack:
         settings_dir = Path.cwd() / ".wvision" / "ultralytics"
@@ -88,7 +95,7 @@ def backend(device: str | None = None, directory: Path | None = None) -> Iterato
             )
             if previous is not None:
                 stack.callback(torch.cuda.set_device, previous)
-            runtime_device(selected, directory)
+            runtime_device(selected, directory, requested=requested_device)
 
             # Upstream accepts torch.device directly, without rewriting CUDA visibility.
             # Force that documented path at every selector, including final validation.

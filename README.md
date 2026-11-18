@@ -1,97 +1,211 @@
 # First Sense
 
-First Sense brings together computer vision training and future local/edge runtime
-work. **WForge** contains the existing WVision training project; its Python API
-and CLI retain the `wvision` name.
+**Giving AI its primary sense. Effortlessly.**
 
-## Install
+First Sense stands for making computer vision accessible: helping people give
+their applications the ability to see, understand, and eventually react to the
+world in real time. It brings model training, learning from unlabeled images,
+and experiment comparison into one workflow.
 
-Use Python 3.12. From this directory:
+## Why First Sense?
+
+Trying a different model often means learning another framework, rewriting
+configuration, and collecting results by hand. Labeling images takes time, and
+comparing learning methods becomes harder when every experiment handles data and
+evaluation differently.
+
+First Sense aims to make that work easier through **one interface to train,
+refine, and compare computer vision models**. Choose a supported model, reuse
+your dataset, run several experiments, and inspect their results together. Spend
+more time improving your data and testing ideas, with the settings and evidence
+needed to understand what changed.
+
+The training component is **[WForge](WForge/README.md)**. Its Python package and
+command-line tool are named `wvision`; the main detection API is `Vision`.
+WForge connects existing models and training methods through shared configuration,
+data checks, experiment records, and evaluation. Training runs through the
+underlying frameworks.
+
+## What you can do today
+
+- **Train through one interface:** use a common Python API or CLI across supported
+  model families, with explicit model-specific settings.
+- **Run and compare experiments:** train multiple models on the same dataset, or
+  vary one model's parameters and seeds. Inspect shared validation metrics,
+  configurations, and checkpoints in HTML, CSV, and JSON reports.
+- **Learn from fewer labels:** use Soft Teacher for semi-supervised detection, or
+  pretrain SimSiam on unlabeled images and transfer its backbone into a detector.
+  Compare these workflows against supervised or random-initialization baselines.
+- **Continue and move your work:** use checkpoint recovery, mixed precision on
+  supported GPUs, portable run bundles, and verified YOLO ONNX export.
+
+| Model / method | Current workflow |
+| --- | --- |
+| YOLO11n | Supervised object detection and local-checkpoint fine-tuning |
+| Faster R-CNN / Soft Teacher | Supervised and semi-supervised object detection |
+| SimSiam ResNet-50 | Self-supervised representation pretraining and checked detector transfer |
+| DINOv3 ConvNeXt Tiny / DETR | Supervised detection with random or supplied local backbone weights |
+
+Supported workflows have been checked on Windows with CPU and a single NVIDIA
+GPU, using separate compatible backend environments. See the
+[model and environment details](WForge/README.md#supported-workflows).
+
+## Where First Sense is heading
+
+The longer-term goal is to carry selected trained models into **real-time
+applications**, including local and edge devices. That means optimizing and
+measuring accuracy, memory use, and latency on the hardware where a model will
+run, alongside making training easier.
+
+Current work provides training, evaluation, portable artifacts, and YOLO ONNX
+export. Real-time runtime integration and deployment optimization are planned,
+along with pose estimation and classification. Follow the
+[roadmap](WForge/docs/MILESTONES.md) and [project mission](PROJECT_MISSION.md).
+
+## Get started
+
+### 1. Install a training backend
+
+For the verified Windows CPU example, use **64-bit Python 3.12**. Open PowerShell
+in this repository and run:
 
 ```powershell
-python -m venv .venv
-.venv/Scripts/python -m pip install -e ./WForge
-.venv/Scripts/python -m wvision --help
-.venv/Scripts/python -m wvision models
+cd WForge
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.4.1 torchvision==0.19.1
+python -m pip install -c constraints/cpu-py312.txt -e ".[ultralytics,evaluation]"
+python -m wvision models
 ```
 
-For development, install `"./WForge[dev]"`. The core installation does not install
-an ML backend. Follow the [backend setup](WForge/docs/DEVELOPMENT.md) or
-[GPU setup](WForge/docs/GPU.md) for the selected model. Separate environments
-remain necessary for the tested upstream stacks.
+If activation is blocked, use `.venv\Scripts\python.exe` instead of `python`.
+**Run all examples below from `WForge/`.** For CUDA, follow the
+[GPU setup](WForge/docs/GPU.md). OpenMMLab and DINOv3 each have their own
+[backend setup guides](WForge/README.md#supported-workflows).
 
-## Use the existing API
+### 2. Train and evaluate a model
 
-From `WForge/`, after backend setup and dataset preparation:
+Generate a tiny synthetic dataset and run a one-epoch smoke test:
+
+```powershell
+python examples/make_tiny_dataset.py .wvision/tiny
+python -m wvision train --model models/detection/yolo11n/smoke.yaml --data datasets/examples/tiny-detection.yaml
+```
+
+The command prints the run's `artifact_dir`, checkpoint paths, and metrics.
+Replace `runs/train-<id>` below with that actual directory:
+
+```powershell
+python -m wvision val --run runs/train-<id>
+python -m wvision test --run runs/train-<id>
+python -m wvision predict --run runs/train-<id> --source .wvision/tiny/images/test-0.png
+```
+
+Use validation data to select models and parameters, then evaluate the chosen
+checkpoint on the held-out test split. This tiny example checks execution;
+use your own [dataset manifest](WForge/datasets/README.md) and an appropriate
+training schedule for useful results.
+
+The same workflow is available in Python. After generating the example data:
 
 ```python
 from wvision import Vision
 
-model = Vision("models/detection/yolo11n/supervised.yaml")
-run = model.train("datasets/my-dataset.yaml", epochs=100, device="cpu")
-validation = model.val()
-test = model.test()
-predictions = model.predict("path/to/image.jpg")
-restored = Vision.from_run(run.artifact_dir)
+
+def main():
+    model = Vision("models/detection/yolo11n/smoke.yaml")
+    run = model.train("datasets/examples/tiny-detection.yaml")
+    print(model.val().metrics)
+    print(model.test().metrics)
+    print(run.artifact_dir)
+
+
+if __name__ == "__main__":
+    main()
 ```
 
-The dataset and image paths are supplied by you. See the
-[training README](WForge/README.md) for an explicitly generated smoke dataset,
-supported model profiles, CLI commands, and limitations. YOLO uses `epochs`;
-OpenMMLab and DINOv3 use `max_iters`.
+### 3. Run several trainings and compare them
 
-## Components
+Save this as `experiments.yaml` inside `WForge/`:
 
-| Directory | Responsibility |
-| --- | --- |
-| [WForge](WForge/README.md) | Training, validation, testing, prediction, learning methods, and experiment records through WVision |
-
-The imported training project supports YOLO11n, Faster R-CNN/Soft Teacher,
-SimSiam, and DINOv3 ConvNeXt Tiny/DETR for their documented CPU/single-GPU
-workflows. Official pretrained DINOv3 verification remains pending. Pose,
-classification, runtime integration, and fully unsupervised detection are
-future capabilities; see the [milestones](WForge/docs/MILESTONES.md).
-
-## Development checks
-
-After installing the development extra, run from `WForge/`:
+```yaml
+schema_version: 1
+data: datasets/examples/tiny-detection.yaml
+experiments:
+  - name: yolo-learning-rates
+    model: models/detection/yolo11n/smoke.yaml
+    training:
+      backend_options:
+        optimizer: SGD
+        mosaic: 0.0
+    grid:
+      backend_options.lr0: [0.001, 0.01]
+      seed: [0, 1]
+```
 
 ```powershell
-python -m pytest -q
-python -m ruff check src examples tests
-python -m ruff format --check src examples tests
-python -m mypy
-python -m build
+python -m wvision experiments --plan experiments.yaml
 ```
 
-Default tests run without ML backends. Real upstream/GPU tests require their
-documented environments and explicit markers. GitHub Actions runs the component's
-core checks from the First Sense root workflow.
+This runs four experiments sequentially: two learning rates across two seeds.
+Open the reported `comparison.html` to compare validation results and settings;
+JSON and CSV reports are saved beside it. Test evaluation stays separate.
 
-Current source layout and supported model combinations are documented in the
-[architecture map](WForge/docs/ARCHITECTURE.md). The repository contains only the
-implemented WForge component; future workspace/runtime components remain roadmap
-items, with no placeholder directories.
+Add entries for other supported models to compare model families on the same
+dataset. The [multi-model example](WForge/examples/experiments.yaml) includes
+Faster R-CNN and requires its OpenMMLab environment. See
+[experiment plans](WForge/docs/TRAINING_OPERATIONS.md#multiple-models-and-parameter-grids)
+for backend selection, initialization, and grid options.
 
-WForge adds optimizer-state resume, explicit mixed precision, parameter-grid/model
-comparisons with common COCO validation, portable bundles, and verified YOLO ONNX
-export. See [training operations](WForge/docs/TRAINING_OPERATIONS.md). Actual
-two-GPU training remains unverified on the one-GPU development machine.
+### 4. Use unlabeled images
 
-Original runs retain absolute references; use portable bundles when moving runs,
-with optional dataset and optimizer-state copies.
+WForge supports both **semi-supervised learning** (labeled and unlabeled images
+used together) and **self-supervised learning** (representation pretraining on
+unlabeled images before detector training). Each method has explicit compatible
+models and transfer paths.
 
-First Sense's original code uses [Apache-2.0](LICENSE); WForge retains the same
-license inside its buildable package.
-Dependencies and weights retain their [upstream terms](WForge/THIRD_PARTY_NOTICES.md).
-See [the project mission](PROJECT_MISSION.md) for scope and direction.
+After the [OpenMMLab setup](WForge/docs/SEMI_SUPERVISED.md), compare supervised
+Faster R-CNN with Soft Teacher on a reproducible label budget:
 
-Find implementation owners in the [code structure and navigation map](WForge/docs/ARCHITECTURE.md#finding-and-changing-code).
+```powershell
+python -m wvision prepare-budget --data datasets/examples/tiny-detection.yaml --destination .wvision/tiny-budget --labeled-count 2 --seed 0
+python -m wvision compare --model models/detection/faster-rcnn-r50/soft-teacher-smoke.yaml --data datasets/examples/tiny-semi-supervised.yaml
+```
 
-## Contributing and publication
+For SimSiam, follow the [self-supervised guide](WForge/docs/SELF_SUPERVISED.md)
+to pretrain, transfer the backbone, and compare against random initialization.
+The [GPU example](WForge/examples/gpu_semi_supervised.py) combines SimSiam
+pretraining with Soft Teacher training.
 
-See [contribution setup](WForge/CONTRIBUTING.md), the
-[first-commit guide](WForge/docs/PUBLISHING.md), and the
-[verification index](WForge/docs/verification/README.md). Raw/local datasets,
-generated runs, environments, weights, and editor state are excluded by the
-repository-root `.gitignore`.
+### 5. Resume, bundle, or export a run
+
+```powershell
+python -m wvision resume --run runs/train-<id> --epochs 50
+python -m wvision bundle --run runs/train-<id> --destination bundles/detector
+python -m pip install -e ".[onnx]"
+python -m wvision export --run runs/train-<id> --format onnx
+```
+
+For YOLO, `--epochs 50` means 50 total epochs. OpenMMLab and DINOv3 use
+`--max-iters`. ONNX export currently covers YOLO; native bundles support the
+other integrated families. See [training operations](WForge/docs/TRAINING_OPERATIONS.md)
+for precision settings, portable data/optimizer state, and recovery requirements.
+
+## Status and further reading
+
+First Sense is an alpha project. Actual two-GPU execution, hosted backend
+automation, and official pretrained DINOv3 acceptance remain verification gates.
+Real-time deployment, pose, classification, and fully unsupervised detection
+remain roadmap work. Current evidence is in the
+[verification index](WForge/docs/verification/README.md).
+
+- [WForge usage and supported workflows](WForge/README.md)
+- [Dataset setup and split requirements](WForge/datasets/README.md)
+- [Training operations and experiment comparison](WForge/docs/TRAINING_OPERATIONS.md)
+- [Architecture and code navigation](WForge/docs/ARCHITECTURE.md)
+- [Development checks](WForge/docs/DEVELOPMENT.md#verification-commands),
+  [contributing](WForge/CONTRIBUTING.md), and [publication](WForge/docs/PUBLISHING.md)
+
+Original code is licensed under [Apache-2.0](LICENSE). Dependencies and weights
+retain their [upstream terms](WForge/THIRD_PARTY_NOTICES.md). Local datasets,
+weights, environments, and generated runs stay outside source control.

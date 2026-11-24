@@ -4,7 +4,7 @@ Dataset manifests are independent of model configs. The same detection manifest 
 
 ## Runnable examples
 
-Prepare the original synthetic CC0 example explicitly from the repository root:
+Prepare the original synthetic CC0 example explicitly from `WForge/`:
 
 ```powershell
 python examples/make_tiny_dataset.py .wvision/tiny
@@ -28,6 +28,44 @@ No example downloads external datasets, copies withheld training labels into the
 Generated data copies use numbered filenames with the original image extension
 to keep long source names from exceeding Windows path limits. Source files remain
 unchanged; dataset snapshots and label-budget metadata retain source identities.
+
+## Group-separated evaluation
+
+For video or football data, assign complete videos/matches to training, validation,
+and test before training. Supply a YAML file mapping **every image path relative
+to the source data root** to its true group ID. For example, a complete mapping for
+a three-image dataset could be:
+
+```yaml
+images/frame-001.jpg: match-a
+images/frame-002.jpg: match-b
+images/frame-003.jpg: match-c
+```
+
+Using your actual manifest and complete mapping, create a separate dataset:
+
+```powershell
+python -m wvision prepare-groups --data datasets/football.yaml --groups match-groups.yaml --destination .wvision/football-grouped --val-groups match-b --test-groups match-c
+```
+
+Named held-out groups must exist and be disjoint, leaving labeled training data.
+Every held-out sample needs a verified annotation. The new dataset copies images
+and labels into numbered paths and records the source mapping/fingerprints in a
+`prepare-groups-*/selection.json` audit. Originals are unchanged. Prepare label
+budgets from this grouped dataset afterward.
+
+Its manifest includes `groups: groups.yaml`, resolved relative to the new data
+root. Loading a grouped manifest rejects any group crossing train/validation/test;
+labeled and unlabeled pools can share training groups. Groups affect the dataset
+fingerprint and survive label-budget copies and portable bundles. Group IDs must
+also be consistent across datasets for transfer-overlap checks. WForge verifies
+the supplied assignments; it cannot prove their real-world meaning or infer
+unknown videos from filenames.
+
+Set `require_groups: true` in an experiment plan when group separation is required.
+Use multiple seeds and appropriate training budgets for quality comparisons;
+group validation alone does not establish model accuracy. See
+[shared evaluation](../docs/DATA_AND_EVALUATION.md#evaluation-protocol).
 
 ## Your own dataset
 

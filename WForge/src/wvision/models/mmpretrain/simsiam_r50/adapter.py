@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from wvision.adapters.shared.process import invoke_worker
-from wvision.datasets.detection import sha256
+from wvision.datasets.detection import Dataset, sha256
 from wvision.experiments.artifacts import artifact_reference
 from wvision.experiments.portable import verify_bundle
 from wvision.models.mmpretrain.simsiam_r50.config import MODEL_ID
+from wvision.training.transfer import transfer_data
 
 
 def invoke(python: Path, directory: Path, request: dict[str, Any]) -> dict[str, Any]:
@@ -17,8 +18,8 @@ def invoke(python: Path, directory: Path, request: dict[str, Any]) -> dict[str, 
     )
 
 
-def load_pretraining(run: str | Path, fingerprint: str) -> dict[str, Any]:
-    """Only transfer a completed, untampered WVision SimSiam run on this dataset."""
+def load_pretraining(run: str | Path, dataset: Dataset) -> dict[str, Any]:
+    """Transfer a completed, untampered representation with held-out overlap checks."""
     directory = Path(run).resolve(strict=True)
     verify_bundle(directory)
     state = json.loads((directory / "run.json").read_text(encoding="utf-8"))
@@ -30,9 +31,9 @@ def load_pretraining(run: str | Path, fingerprint: str) -> dict[str, Any]:
         or status.get("status") != "completed"
     ):
         raise ValueError("Expected a completed WVision SimSiam pretraining run")
-    if state["dataset_fingerprint"] != fingerprint:
-        raise ValueError("Pretraining dataset identity differs from downstream dataset")
+    snapshot = json.loads((directory / "dataset.json").read_text(encoding="utf-8"))
+    audit = transfer_data(snapshot, state, dataset)
     checkpoint = artifact_reference(directory, state["checkpoint"])
     if sha256(checkpoint) != state["checkpoint_sha256"]:
         raise ValueError("Pretraining checkpoint content has changed")
-    return {"run": str(directory), **state, "checkpoint": str(checkpoint)}
+    return {"run": str(directory), **state, "checkpoint": str(checkpoint), "transfer_data": audit}

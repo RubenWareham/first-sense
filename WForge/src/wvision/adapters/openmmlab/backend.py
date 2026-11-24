@@ -4,12 +4,18 @@ import os
 from pathlib import Path
 
 
-def interpreter(value: str | Path | None) -> Path:
-    reference = value or os.environ.get("WVISION_MMDET_PYTHON")
+def interpreter(
+    value: str | Path | None,
+    *,
+    env: str = "WVISION_MMDET_PYTHON",
+    backend: str = "MMDetection",
+    guide: str = "SEMI_SUPERVISED.md",
+) -> Path:
+    reference = value or os.environ.get(env)
     if not reference:
         raise ValueError(
-            "MMDetection requires its isolated environment. Pass backend_python=... or "
-            "set WVISION_MMDET_PYTHON; see docs/SEMI_SUPERVISED.md."
+            f"{backend} requires its isolated environment. Pass backend_python=... or "
+            f"set {env}; see docs/{guide}."
         )
     path = Path(reference).resolve(strict=True)
     if not path.is_file():

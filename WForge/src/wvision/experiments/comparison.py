@@ -17,7 +17,8 @@ from wvision.adapters.shared.process import stop_process_tree
 from wvision.api import Vision
 from wvision.core.config import load_yaml, reject_unknown
 from wvision.core.contracts import ExperimentResult
-from wvision.core.model_config import training_values
+from wvision.core.model_config import model_reference, training_values
+from wvision.core.registry import get_model
 from wvision.datasets.detection import load_dataset, sha256
 from wvision.evaluation.detection import COCO_PROTOCOL, evaluate_predictions, require_evaluator
 from wvision.experiments.artifacts import operation, write_json
@@ -30,7 +31,11 @@ def _reference(value: Any, base: Path) -> str:
 
 
 def _jobs(plan: dict[str, Any], base: Path) -> list[dict[str, Any]]:
-    reject_unknown(plan, {"schema_version", "data", "experiments"}, "experiment plan")
+    reject_unknown(
+        plan, {"schema_version", "data", "experiments", "require_groups"}, "experiment plan"
+    )
+    if type(plan.get("require_groups", False)) is not bool:
+        raise ValueError("require_groups must be a boolean")
     if type(plan.get("schema_version")) is not int or plan["schema_version"] != 1:
         raise ValueError("Experiment schema_version must be 1")
     entries = plan.get("experiments")
@@ -69,7 +74,7 @@ def _jobs(plan: dict[str, Any], base: Path) -> list[dict[str, Any]]:
             raise ValueError("training, grid, and initialization must be mappings")
         reject_unknown(
             initial,
-            {"checkpoint", "pretraining_run", "backbone_weights", "detector_run"},
+            {"checkpoint", "pretraining_run", "backbone_weights", "detector_run", "transfer_scope"},
             "initialization",
         )
         if entry.get("run") and (training or grid or initial):
@@ -81,6 +86,14 @@ def _jobs(plan: dict[str, Any], base: Path) -> list[dict[str, Any]]:
             raise ValueError("Experiment model must be an identifier or YAML path")
         if model and Path(model).suffix.lower() in {".yaml", ".yml"}:
             model = _reference(model, base)
+        run = _reference(entry["run"], base) if entry.get("run") else None
+        if model:
+            model_id = model_reference(model)[0]
+        else:
+            assert run is not None
+            model_id = json.loads((Path(run) / "run.json").read_text(encoding="utf-8"))["model"]
+        if get_model(model_id).task != "detect":
+            raise ValueError("The shared COCO bbox experiments workflow only supports detection")
         backend = _reference(entry["backend_python"], base) if entry.get("backend_python") else None
         detector = Vision(model, backend_python=backend) if model else None
         defaults = training_values(detector._definition, training) if detector else training
@@ -99,14 +112,15 @@ def _jobs(plan: dict[str, Any], base: Path) -> list[dict[str, Any]]:
                 {
                     "name": f"{name}-{index + 1:03d}" if grid else name,
                     "model": model,
-                    "run": _reference(entry["run"], base) if entry.get("run") else None,
+                    "run": run,
                     "python": _reference(entry["python"], base)
                     if entry.get("python")
                     else sys.executable,
                     "backend_python": backend,
                     "training": settings,
                     "initialization": {
-                        key: _reference(value, base) for key, value in initial.items()
+                        key: (value if key == "transfer_scope" else _reference(value, base))
+                        for key, value in initial.items()
                     },
                 }
             )
@@ -117,6 +131,12 @@ def _jobs(plan: dict[str, Any], base: Path) -> list[dict[str, Any]]:
 
 
 def _report(directory: Path, results: list[dict[str, Any]], fingerprint: str) -> None:
+    snapshot = directory / "dataset.json"
+    grouping = (
+        bool(json.loads(snapshot.read_text(encoding="utf-8")).get("groups"))
+        if snapshot.exists()
+        else False
+    )
     groups: dict[str, list[dict[str, Any]]] = {}
     for result in results:
         identity = json.dumps(
@@ -164,6 +184,7 @@ def _report(directory: Path, results: list[dict[str, Any]], fingerprint: str) ->
             "aggregates": aggregate,
             "selection_split": "val",
             "test_evaluated": False,
+            "group_isolation": "verified" if grouping else "unverified: groups not supplied",
             "limitations": [
                 "Shared COCO metrics permit comparison; native metrics retain namespaces; "
                 "no cross-protocol ranking",
@@ -263,7 +284,9 @@ function sortRows(column){
         "<h1>WForge experiment comparison</h1><p>Validation results. Test data was not evaluated. "
         "Compare scores within the same evaluator and metric protocol; "
         "equal training steps do not imply equal compute.</p>"
-        f"<p>Dataset: <code>{fingerprint}</code></p>{chart}<p>Click a column to sort.</p>"
+        f"<p>Dataset: <code>{fingerprint}</code></p>"
+        f"<p>Group isolation: {'verified' if grouping else 'unverified — groups not supplied'}.</p>"
+        f"{chart}<p>Click a column to sort.</p>"
         '<div class="scroll"><table>'
         f"<thead><tr>{heading}</tr></thead><tbody>{table}</tbody></table></div>{detail}{script}</html>",
         encoding="utf-8",
@@ -278,6 +301,8 @@ def run_experiments(plan: str | Path, *, output: str | Path = "runs") -> Experim
     document = load_yaml(path)
     jobs = _jobs(document, path.parent)
     dataset = load_dataset(_reference(document.get("data"), path.parent), ("train_labeled", "val"))
+    if document.get("require_groups") and not dataset.groups:
+        raise ValueError("This experiment requires explicit, isolated dataset groups")
     if checksum != sha256(path):
         raise ValueError("Experiment plan changed during preflight")
     with operation(output, "experiments", {"plan": str(path), "sha256": checksum}) as directory:

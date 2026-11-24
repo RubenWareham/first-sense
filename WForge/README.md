@@ -22,6 +22,8 @@ dataset validation, experiment tracking, and normalized results.
 | Model / method | Workflow | Guide |
 | --- | --- | --- |
 | YOLO11n | Supervised detection; fine-tuning from a trusted local checkpoint | [Detection](docs/DEVELOPMENT.md) |
+| YOLO11n-pose | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton | [Pose](docs/POSE.md) |
+| RTMPose-t | Supervised top-down COCO-17 or Halpe-26 pose from person boxes | [RTMPose](docs/RTMPOSE.md) |
 | Faster R-CNN R50-FPN + Soft Teacher | Supervised and semi-supervised detection using labeled and unlabeled images | [Semi-supervised detection](docs/SEMI_SUPERVISED.md) |
 | SimSiam ResNet-50 | Self-supervised pretraining; backbone transfer into Faster R-CNN or Soft Teacher | [Self-supervised learning](docs/SELF_SUPERVISED.md) |
 | DINOv3 ConvNeXt Tiny + DETR | Supervised detection with random or explicitly supplied local backbone weights | [DINOv3](docs/DINOV3.md) |
@@ -32,9 +34,9 @@ isolated Python 3.12 backend. Faster R-CNN, Soft Teacher, and SimSiam use separa
 Python 3.10 backends. Each CUDA environment has its own verified torch build;
 see [GPU setup](docs/GPU.md). Optimizer-state recovery, explicit mixed precision,
 portable bundles, multi-model/parameter-grid comparison with shared COCO validation,
-and YOLO ONNX export are described in [training operations](docs/TRAINING_OPERATIONS.md).
+and YOLO/DINOv3/MMDetection ONNX export are described in [training operations](docs/TRAINING_OPERATIONS.md).
 The managed DDP launcher still needs actual two-GPU verification. Fully unsupervised
-detection, pose, and classification remain unsupported. Official
+detection and classification remain unsupported. Official
 pretrained DINOv3 transfer remains unverified; random and local-fixture execution
 have been checked.
 

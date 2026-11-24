@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from wvision.adapters.shared.checkpoints import checkpoint_files
+from wvision.core.registry import get_model
 from wvision.datasets.detection import load_dataset, sha256
 from wvision.experiments.artifacts import artifact_reference, run_lock, write_json
 
@@ -59,6 +60,8 @@ def bundle_run(
         status = json.loads((source / "status.json").read_text(encoding="utf-8"))
         if state.get("schema_version") != 1 or status.get("status") != "completed":
             raise ValueError("Bundle requires a completed training/pretraining run")
+        if get_model(state["model"]).task == "pose":
+            raise ValueError("Portable bundles for pose runs are not supported yet")
         references = (
             ["checkpoint"]
             if state.get("run_kind") == "self_supervised_pretrain"
@@ -148,6 +151,8 @@ def bundle_run(
                 file.write_text("\n".join(listing) + "\n", encoding="utf-8")
                 splits[split] = file.name
             manifest = root / "dataset.yaml"
+            if dataset.groups:
+                (root / "groups.yaml").write_text(yaml.safe_dump(dataset.groups), encoding="utf-8")
             manifest.write_text(
                 yaml.safe_dump(
                     {
@@ -157,6 +162,7 @@ def bundle_run(
                         "root": ".",
                         "classes": dataset.classes,
                         "splits": splits,
+                        **({"groups": "groups.yaml"} if dataset.groups else {}),
                     }
                 ),
                 encoding="utf-8",

@@ -407,6 +407,107 @@ def evaluate(request: dict[str, Any], directory: Path) -> dict[str, Any]:
     }
 
 
+def export(request: dict[str, Any], directory: Path) -> dict[str, Any]:
+    """Export upstream forward outputs and verify them using ONNX Runtime on CPU."""
+    try:
+        import numpy as np
+        import onnx
+        import onnxruntime as ort
+        import torch
+    except ImportError as error:
+        raise RuntimeError(
+            "Install onnx==1.17.0 and onnxruntime==1.20.1 in the DINOv3 backend"
+        ) from error
+
+    model = restore(request).float().eval()
+    size = request["imgsz"]
+
+    class Outputs(torch.nn.Module):  # type: ignore[misc]
+        def __init__(self) -> None:
+            super().__init__()
+            self.detector = model
+
+        def forward(self, pixel_values: Any, pixel_mask: Any) -> Any:
+            values = self.detector(
+                pixel_values=pixel_values, pixel_mask=pixel_mask, return_dict=True
+            )
+            return values.logits, values.pred_boxes
+
+    wrapper = Outputs().eval()
+    pixels = torch.zeros((1, 3, size, size), dtype=torch.float32)
+    mask = torch.ones((1, size, size), dtype=torch.int64)
+    target = directory / "model.onnx"
+    with torch.inference_mode():
+        torch.onnx.export(
+            wrapper,
+            (pixels, mask),
+            str(target),
+            opset_version=17,
+            dynamo=False,
+            input_names=["pixel_values", "pixel_mask"],
+            output_names=["logits", "pred_boxes"],
+        )
+    onnx.checker.check_model(onnx.load(str(target)))
+    session = ort.InferenceSession(str(target), providers=["CPUExecutionProvider"])
+    errors = {"logits": 0.0, "pred_boxes": 0.0}
+    for sample in (pixels, torch.linspace(-1, 1, 3 * size * size).reshape(1, 3, size, size)):
+        with torch.inference_mode():
+            native = wrapper(sample, mask)
+        feeds = {"pixel_values": sample.numpy(), "pixel_mask": mask.numpy()}
+        actual = session.run(None, {item.name: feeds[item.name] for item in session.get_inputs()})
+        for name, expected, observed in zip(errors, native, actual, strict=True):
+            reference = expected.cpu().numpy()
+            if not np.isfinite(observed).all():
+                raise ValueError("DINOv3 export produced non-finite values")
+            np.testing.assert_allclose(observed, reference, rtol=1e-3, atol=1e-4)
+            errors[name] = max(errors[name], float(np.max(np.abs(observed - reference))))
+    dump(
+        directory / "export.json",
+        {
+            "schema_version": 1,
+            "format": "onnx",
+            "model": target.name,
+            "sha256": digest(target),
+            "source_checkpoint_sha256": digest(Path(request["checkpoint"])),
+            "classes": model.config.id2label,
+            "precision": "fp32",
+            "opset": 17,
+            "inputs": [
+                {"name": item.name, "shape": item.shape, "type": item.type}
+                for item in session.get_inputs()
+            ],
+            "preprocessing": {
+                "resize": [size, size],
+                "preserve_aspect_ratio": False,
+                "resampling": "PIL bilinear",
+                "layout": "NCHW RGB",
+                "rescale": 1 / 255,
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225],
+                "pixel_mask": "int64 ones; fixed square input",
+            },
+            "outputs": {
+                "logits": "batch, queries, classes+1; final class is no-object",
+                "pred_boxes": "batch, queries, normalized cxcywh",
+                "postprocessing": "softmax logits over classes+1; discard final no-object column; "
+                "select maximum foreground score/class per query; convert cxcywh to xyxy "
+                "and scale to original image dimensions; clip to bounds; "
+                "threshold and sort by score",
+                "nms_included": False,
+            },
+            "verification": {
+                "runtime": "onnxruntime CPUExecutionProvider",
+                "samples": 2,
+                "rtol": 1e-3,
+                "atol": 1e-4,
+                "max_absolute_error": errors,
+            },
+        },
+    )
+    record_model_device(model, "cpu", directory)
+    return {"model": str(target)}
+
+
 def main() -> None:
     request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     if request.get("schema_version") != 1:
@@ -433,6 +534,8 @@ def main() -> None:
         result = train(request, directory)
     elif request["operation"] in ("val", "test"):
         result = evaluate(request, directory)
+    elif request["operation"] == "export":
+        result = export(request, directory)
     elif request["operation"] == "predict":
         model = restore(request)
         with (directory / "predictions.jsonl").open("w", encoding="utf-8") as handle:

@@ -79,6 +79,9 @@ jobs:
               & $backendPython -m pip install --index-url "https://download.pytorch.org/whl/$wheel" --extra-index-url https://pypi.org/simple torch==2.1.0 torchvision==0.16.0 numpy==1.26.4 Pillow==10.3.0
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
               & $backendPython -m pip install -c $constraints --only-binary=mmcv --find-links "https://download.openmmlab.com/mmcv/dist/$mmcv/index.html" mmcv==2.1.0 mmengine==0.10.7 mmdet==3.3.0 mmpretrain==1.2.0
+              if ($LASTEXITCODE) { exit $LASTEXITCODE }
+              & $backendPython -m pip install -c constraints/mmdeploy-py310.txt mmdeploy onnx onnxruntime protobuf
+              "WVISION_MMDEPLOY_PYTHON=$backendPython" >> $env:GITHUB_ENV
               "WVISION_MMDET_PYTHON=$backendPython" >> $env:GITHUB_ENV
               "WVISION_TEST_PYTHON=$env:WVISION_CORE_PYTHON" >> $env:GITHUB_ENV
             }
@@ -87,7 +90,7 @@ jobs:
               $constraints = if ($cuda) { 'constraints/transformers-cuda-py312.txt' } else { 'constraints/transformers-cpu-py312.txt' }
               & $backendPython -m pip install --index-url "https://download.pytorch.org/whl/$wheel" --extra-index-url https://pypi.org/simple torch==2.8.0 torchvision==0.23.0 numpy==1.26.4 Pillow==10.3.0
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
-              & $backendPython -m pip install -c $constraints transformers==5.22.2 accelerate==1.10.1 safetensors==0.8.0 pycocotools==2.0.11 scipy==1.15.3
+              & $backendPython -m pip install -c $constraints transformers==5.22.2 accelerate==1.10.1 safetensors==0.8.0 pycocotools==2.0.11 scipy==1.15.3 onnx==1.17.0 onnxruntime==1.20.1
               "WVISION_TRANSFORMERS_PYTHON=$backendPython" >> $env:GITHUB_ENV
               "WVISION_TEST_PYTHON=$env:WVISION_CORE_PYTHON" >> $env:GITHUB_ENV
             }
@@ -126,6 +129,8 @@ jobs:
             WForge/.wvision/ci-tests/**/config.json
             WForge/.wvision/ci-tests/**/device.json
             WForge/.wvision/ci-tests/**/metrics.json
+            WForge/.wvision/ci-tests/**/per-class.json
+            WForge/.wvision/ci-tests/**/selection.json
             WForge/.wvision/ci-tests/**/recovery.json
             WForge/.wvision/ci-tests/**/comparison.json
             WForge/.wvision/ci-tests/**/comparison.csv

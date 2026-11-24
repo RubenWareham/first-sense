@@ -8,7 +8,15 @@ from typing import Any
 import pytest
 import yaml
 
-from wvision import Vision, bundle_run, prepare_label_budget, pretrain, resume, run_experiments
+from wvision import (
+    Vision,
+    bundle_run,
+    prepare_group_split,
+    prepare_label_budget,
+    pretrain,
+    resume,
+    run_experiments,
+)
 from wvision.adapters.shared.checkpoints import checkpoint_files
 from wvision.datasets.detection import load_dataset
 from wvision.evaluation.detection import evaluate_predictions
@@ -18,13 +26,28 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.ultralytics
-def test_shared_coco_metric_and_split_isolation(manifest: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize("split", ["val", "test"])
+def test_shared_coco_metric_and_split_isolation(manifest: Path, tmp_path: Path, split: str) -> None:
     pytest.importorskip("pycocotools")
     from PIL import Image
 
-    dataset = load_dataset(manifest, ("val",))
+    original = load_dataset(manifest, ())
+    groups = tmp_path / "groups.yaml"
+    groups.write_text(
+        yaml.safe_dump(
+            {
+                s.path.relative_to(original.root).as_posix(): name
+                for name, pool in original.splits.items()
+                for s in pool
+            }
+        )
+    )
+    grouped = prepare_group_split(
+        manifest, tmp_path / "grouped", groups=groups, val_groups=["val"], test_groups=["test"]
+    )
+    dataset = load_dataset(grouped, (split,))
     rows = []
-    for sample in dataset.splits["val"]:
+    for sample in dataset.splits[split]:
         with Image.open(sample.path) as image:
             width, height = image.size
         boxes, ids = [], []
@@ -56,12 +79,22 @@ def test_shared_coco_metric_and_split_isolation(manifest: Path, tmp_path: Path) 
     predictions.write_text("\n".join(json.dumps(row) for row in rows))
     checkpoint = tmp_path / "fixture.pt"
     checkpoint.write_bytes(b"metric fixture, not a trained model")
-    result = evaluate_predictions(dataset, predictions, checkpoint=checkpoint, output=tmp_path)
+    result = evaluate_predictions(
+        dataset, predictions, checkpoint=checkpoint, output=tmp_path, split=split
+    )
     assert result.metrics["wforge/coco/bbox_mAP"] == pytest.approx(1.0)
-    rows[0]["sample"] = str(dataset.splits["test"][0].path)
+    assert result.metrics["wforge/coco/classes/rectangle/bbox_mAP"] == pytest.approx(1.0)
+    assert result.split == split
+    assert (
+        json.loads((result.artifact_dir / "config.json").read_text())["group_isolation"]
+        == "verified"
+    )
+    rows[0]["sample"] = str(dataset.splits["train_labeled"][0].path)
     predictions.write_text("\n".join(json.dumps(row) for row in rows))
-    with pytest.raises(ValueError, match="non-validation"):
-        evaluate_predictions(dataset, predictions, checkpoint=checkpoint, output=tmp_path)
+    with pytest.raises(ValueError, match="non-validation|non-test"):
+        evaluate_predictions(
+            dataset, predictions, checkpoint=checkpoint, output=tmp_path, split=split
+        )
 
 
 def executable(name: str) -> str:
@@ -218,6 +251,11 @@ def test_dinov3_resume_and_relocated_detector(manifest: Path, tmp_path: Path, fr
         tmp_path / "portable",
         backend=backend,
     )
+    if not freeze:
+        exported = Vision.from_run(continued.artifact_dir).export(output=tmp_path)
+        manifest_data = json.loads(exported.manifest.read_text())
+        assert manifest_data["verification"]["samples"] == 2
+        assert set(manifest_data["verification"]["max_absolute_error"]) == {"logits", "pred_boxes"}
 
 
 @pytest.mark.distributed

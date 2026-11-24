@@ -7,7 +7,7 @@ from typing import cast
 from wvision.adapters.base import Capability, DetectionAdapter, InitializationRule, ModelSpec
 
 
-def _detection(
+def _vision_capabilities(
     learning: tuple[str, ...], devices: tuple[str, ...] = ("cpu",)
 ) -> tuple[Capability, ...]:
     return tuple(
@@ -25,7 +25,7 @@ _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
             "ultralytics/yolo11n",
             "ultralytics",
             "detect",
-            _detection(("supervised",), ("cpu", "cuda")),
+            _vision_capabilities(("supervised",), ("cpu", "cuda")),
             "Verified Windows CPU/CUDA; random or trusted local YOLO11n initialization",
             (InitializationRule("ultralytics/yolo11n", "checkpoint", "detector", "supervised"),),
             exports=("onnx",),
@@ -34,10 +34,31 @@ _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
     ),
     (
         ModelSpec(
+            "ultralytics/yolo11n-pose",
+            "ultralytics",
+            "pose",
+            _vision_capabilities(("supervised",), ("cpu", "cuda")),
+            "Human pose with a dataset-defined skeleton; supervised FP32 on CPU and single GPU",
+        ),
+        "wvision.models.ultralytics.yolo11.adapter:create_adapter",
+    ),
+    (
+        ModelSpec(
+            "mmpose/rtmpose-t",
+            "mmpose",
+            "pose",
+            _vision_capabilities(("supervised",), ("cpu", "cuda")),
+            "RTMPose-t with COCO-17 or Halpe-26; prediction takes explicit person boxes",
+            requires_person_boxes=True,
+        ),
+        "wvision.models.mmpose.rtmpose_t.adapter:create_adapter",
+    ),
+    (
+        ModelSpec(
             "mmdetection/faster-rcnn-r50",
             "mmdetection",
             "detect",
-            _detection(("supervised", "semi_supervised"), ("cpu", "cuda")),
+            _vision_capabilities(("supervised", "semi_supervised"), ("cpu", "cuda")),
             "Verified Windows CPU/single CUDA GPU; upstream Soft Teacher in semi-supervised mode",
             (
                 InitializationRule(
@@ -53,7 +74,17 @@ _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
                 InitializationRule(
                     "mmdetection/faster-rcnn-r50", "detector_run", "detector", "semi_supervised"
                 ),
+                InitializationRule(
+                    "mmdetection/faster-rcnn-r50", "detector_run", "detector", "supervised"
+                ),
+                InitializationRule(
+                    "mmdetection/faster-rcnn-r50", "detector_run", "backbone", "supervised"
+                ),
+                InitializationRule(
+                    "mmdetection/faster-rcnn-r50", "detector_run", "backbone", "semi_supervised"
+                ),
             ),
+            exports=("onnx",),
         ),
         "wvision.models.mmdetection.faster_rcnn_r50.adapter:create_adapter",
     ),
@@ -75,13 +106,14 @@ _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
             "transformers/dinov3-convnext-tiny-detr",
             "transformers",
             "detect",
-            _detection(("supervised",), ("cpu", "cuda")),
+            _vision_capabilities(("supervised",), ("cpu", "cuda")),
             "Verified CPU/CUDA random/local-fixture paths; official pretrained weights unverified",
             (
                 InitializationRule(
                     "dinov3/convnext-tiny", "backbone_weights", "backbone", "supervised"
                 ),
             ),
+            exports=("onnx",),
         ),
         "wvision.models.transformers.dinov3_convnext_tiny_detr.adapter:create_adapter",
     ),
@@ -103,10 +135,10 @@ def get_model(model_id: str) -> ModelSpec:
     )
 
 
-def detection_adapter(model_id: str, python: str | Path | None) -> DetectionAdapter:
+def vision_adapter(model_id: str, python: str | Path | None) -> DetectionAdapter:
     spec = get_model(model_id)
     factory = next(reference for candidate, reference in _MODELS if candidate == spec)
-    if spec.task != "detect" or factory is None:
+    if factory is None:
         raise ValueError(f"{model_id} is a representation model; use pretrain()")
     module, name = factory.split(":")
     create = getattr(import_module(module), name)

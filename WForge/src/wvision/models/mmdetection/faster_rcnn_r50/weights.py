@@ -7,9 +7,12 @@ from typing import Any
 from wvision.datasets.detection import Dataset, sha256
 from wvision.experiments.artifacts import artifact_reference
 from wvision.experiments.portable import verify_bundle
+from wvision.training.transfer import transfer_data
 
 
-def detector_source(run: Path, dataset: Dataset, backbone_style: str) -> dict[str, Any]:
+def detector_source(
+    run: Path, dataset: Dataset, backbone_style: str, scope: str = "detector"
+) -> dict[str, Any]:
     directory = run.resolve(strict=True)
     verify_bundle(directory)
     state = json.loads((directory / "run.json").read_text(encoding="utf-8"))
@@ -21,15 +24,14 @@ def detector_source(run: Path, dataset: Dataset, backbone_style: str) -> dict[st
         or state.get("config", {}).get("learning") != "supervised"
     ):
         raise ValueError("detector_run requires a completed supervised WVision Faster R-CNN run")
-    if state.get("dataset_fingerprint") != dataset.fingerprint:
-        raise ValueError(
-            "Detector source dataset identity differs; use the same labeled/unlabeled splits"
-        )
+    if scope not in {"detector", "backbone"}:
+        raise ValueError("Detector transfer scope must be detector or backbone")
     source_style = state["config"].get("backend_options", {}).get("backbone_style", "caffe")
     if source_style != backbone_style:
         raise ValueError("Detector source backbone style differs from target backbone_style")
     snapshot = json.loads((directory / "dataset.json").read_text(encoding="utf-8"))
-    if snapshot.get("fingerprint") != dataset.fingerprint or snapshot.get("classes") != {
+    audit = transfer_data(snapshot, state, dataset)
+    if scope == "detector" and snapshot.get("classes") != {
         str(k): v for k, v in dataset.classes.items()
     }:
         raise ValueError("Detector source class map/dataset snapshot differs from target")
@@ -49,8 +51,9 @@ def detector_source(run: Path, dataset: Dataset, backbone_style: str) -> dict[st
         "checkpoint_sha256": state["best_checkpoint_sha256"],
         "model_config": str(config),
         "model_config_sha256": state["model_config_sha256"],
-        "dataset_fingerprint": dataset.fingerprint,
-        "scope": "complete_detector",
+        "dataset_fingerprint": state["dataset_fingerprint"],
+        "scope": "complete_detector" if scope == "detector" else "backbone",
+        "transfer_data": audit,
         "backbone_style": source_style,
         "source_learning": "supervised",
         "initialization": state.get("initialization"),

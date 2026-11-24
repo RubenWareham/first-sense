@@ -1,4 +1,4 @@
-"""YOLO11n train/evaluate/predict calls; all learning remains upstream."""
+"""YOLO11n detection and pose operations. Training stays upstream."""
 
 import shutil
 from pathlib import Path
@@ -10,22 +10,42 @@ from wvision.adapters.shared.devices import record_model_device, runtime_precisi
 from wvision.adapters.ultralytics.backend import BACKEND_VERSION, backend, metrics
 from wvision.adapters.ultralytics.backend import check_dependency as check_dependency
 from wvision.datasets.detection import sha256
+from wvision.datasets.pose import JOINTS, PoseSkeleton
 from wvision.experiments.artifacts import write_json
 from wvision.models.ultralytics.yolo11.config import TrainConfig
 
 MODEL_ID = "ultralytics/yolo11n"
 SELECTION = {"metric": "0.1 * AP50 + 0.9 * AP50_95", "direction": "maximize"}
+POSE_SELECTION = {
+    "metric": "0.1 * (box AP50 + pose AP50) + 0.9 * (box AP50_95 + pose AP50_95)",
+    "direction": "maximize",
+}
 
 
-def load_model(factory: Any, checkpoint: Path | None) -> Any:
-    model = factory(str(checkpoint) if checkpoint else "yolo11n.yaml", task="detect")
+def load_model(
+    factory: Any,
+    checkpoint: Path | None,
+    task: str = "detect",
+    *,
+    skeleton: PoseSkeleton | None = None,
+) -> Any:
+    if task == "pose" and checkpoint is not None and skeleton is None:
+        raise ValueError("A pose checkpoint requires its resolved skeleton")
+    suffix = "-pose" if task == "pose" else ""
+    model = factory(str(checkpoint) if checkpoint else f"yolo11n{suffix}.yaml", task=task)
     definition = model.model.yaml
     if (
-        model.task != "detect"
+        model.task != task
         or "yolo11" not in Path(definition.get("yaml_file", "")).stem
         or definition.get("scale") != "n"
+        or (task == "pose" and checkpoint is not None and model.names != {0: "person"})
     ):
-        raise ValueError("Checkpoint must belong to the registered YOLO11n detection architecture")
+        raise ValueError(f"Checkpoint must belong to the registered YOLO11n {task} architecture")
+    if (
+        skeleton is not None
+        and getattr(model.model.model[-1], "kpt_shape", None) != skeleton["kpt_shape"]
+    ):
+        raise ValueError(f"Checkpoint keypoint shape differs from skeleton {skeleton['id']!r}")
     return model
 
 
@@ -35,6 +55,7 @@ def train(
     config: TrainConfig,
     directory: Path,
     *,
+    task: str = "detect",
     resume: dict[str, Any] | None = None,
     distributed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -66,7 +87,7 @@ def train(
                 save_dir=str(upstream),
             )
             torch.save(state, checkpoint)
-        model = load_model(factory, checkpoint)
+        model = load_model(factory, checkpoint, task)
 
         def save_recovery(trainer: Any) -> None:
             if (
@@ -81,7 +102,8 @@ def train(
             temporary.replace(target)
             record_checkpoint(directory, target, trainer.epoch + 1, selected=trainer.best)
 
-        model.add_callback("on_model_save", save_recovery)
+        if task == "detect":
+            model.add_callback("on_model_save", save_recovery)
         if resume:
             if resume.get("selected") and (not distributed or distributed["rank"] == 0):
                 weights = upstream / "weights"
@@ -97,7 +119,8 @@ def train(
         )
         from ultralytics.utils import ROOT
 
-        definition = ROOT / "cfg" / "models" / "11" / "yolo11.yaml"
+        name = "yolo11-pose.yaml" if task == "pose" else "yolo11.yaml"
+        definition = ROOT / "cfg" / "models" / "11" / name
         shutil.copyfile(definition, directory / "upstream-model.yaml")
         write_json(
             directory / "model-source.json",
@@ -106,9 +129,9 @@ def train(
                 "version": BACKEND_VERSION,
                 "repository": "https://github.com/ultralytics/ultralytics",
                 "release": "v8.3.4",
-                "model": MODEL_ID,
+                "model": f"{MODEL_ID}-pose" if task == "pose" else MODEL_ID,
                 "scale": "n",
-                "bundled_definition": "cfg/models/11/yolo11.yaml",
+                "bundled_definition": f"cfg/models/11/{name}",
                 "definition_sha256": sha256(definition),
                 "initialization": "optimizer-state resume"
                 if resume
@@ -154,7 +177,8 @@ def train(
         best, last = weights / "best.pt", weights / "last.pt"
         if not best.is_file() or not last.is_file():
             raise RuntimeError("Upstream training did not produce best.pt and last.pt")
-        record_checkpoint(directory, directory / "recovery.pt", config.epochs, selected=best)
+        if task == "detect":
+            record_checkpoint(directory, directory / "recovery.pt", config.epochs, selected=best)
         return {"best": best, "last": last, "metrics": metrics(result)}
 
 
@@ -166,9 +190,12 @@ def evaluate(
     imgsz: int,
     batch: int,
     device: str = "cpu",
+    *,
+    task: str = "detect",
+    skeleton: PoseSkeleton | None = None,
 ) -> dict[str, float]:
     with backend(device, directory) as factory:
-        model = load_model(factory, checkpoint)
+        model = load_model(factory, checkpoint, task, skeleton=skeleton)
         if model.names != classes:
             raise ValueError("Checkpoint class map does not match the evaluation dataset")
         result = model.val(
@@ -187,7 +214,57 @@ def evaluate(
             max_det=300,
         )
         record_model_device(model.model, device, directory)
+        if skeleton is not None:
+            from ultralytics.utils.metrics import OKS_SIGMA
+
+            count = len(skeleton["joints"])
+            # Ultralytics 8.3.4 selects COCO sigmas for [17, 3] and 1/K otherwise.
+            coco = count == len(JOINTS)
+            write_json(
+                directory / "pose-protocol.json",
+                {
+                    "version": BACKEND_VERSION,
+                    "skeleton": skeleton["id"],
+                    "keypoint_count": count,
+                    "oks_sigmas": OKS_SIGMA.tolist() if coco else [1.0 / count] * count,
+                    "oks_sigma_source": "coco17" if coco else "ultralytics_uniform",
+                    "oks_thresholds": [value / 100 for value in range(50, 100, 5)],
+                    "oks_area": "0.53 * ground-truth bounding box area in pixels",
+                },
+            )
         return metrics(result)
+
+
+def pose_persons(result: Any, count: int) -> list[dict[str, Any]]:
+    """Read upstream keypoints in original pixels, preserving their person association."""
+    points = result.keypoints
+    boxes = result.boxes
+    if not len(boxes):
+        return []
+    if points is None or tuple(points.data.shape[1:]) != (count, 3):
+        raise ValueError(f"Expected {count} pose joints with confidence for each person")
+    return [
+        {
+            "class_id": int(category),
+            "box": box,
+            "confidence": confidence,
+            "joints": [
+                {
+                    "x": x if score >= 0.5 else None,
+                    "y": y if score >= 0.5 else None,
+                    "confidence": score,
+                }
+                for x, y, score in joints
+            ],
+        }
+        for box, category, confidence, joints in zip(
+            boxes.xyxy.cpu().tolist(),
+            boxes.cls.cpu().tolist(),
+            boxes.conf.cpu().tolist(),
+            points.data.cpu().tolist(),
+            strict=True,
+        )
+    ]
 
 
 def predict(
@@ -196,13 +273,16 @@ def predict(
     directory: Path,
     imgsz: int,
     device: str = "cpu",
+    *,
+    task: str = "detect",
+    skeleton: PoseSkeleton | None = None,
     **options: Any,
 ) -> int:
     import json
 
     count = 0
     with backend(device, directory) as factory:
-        model = load_model(factory, checkpoint)
+        model = load_model(factory, checkpoint, task, skeleton=skeleton)
         with (directory / "predictions.jsonl").open("w", encoding="utf-8") as handle:
             for result in model.predict(
                 source=source,
@@ -213,17 +293,29 @@ def predict(
                 verbose=False,
                 **options,
             ):
-                boxes = result.boxes
                 value = {
                     "sample": str(Path(result.path).resolve()),
                     "height": int(result.orig_shape[0]),
                     "width": int(result.orig_shape[1]),
                     "coordinate_format": "absolute_pixel_xyxy",
                     "classes": result.names,
-                    "boxes": boxes.xyxy.cpu().tolist(),
-                    "scores": boxes.conf.cpu().tolist(),
-                    "class_ids": [int(v) for v in boxes.cls.cpu().tolist()],
                 }
+                if skeleton is not None:
+                    keypoints = len(skeleton["joints"])
+                    value.update(
+                        skeleton=skeleton["id"],
+                        keypoint_count=keypoints,
+                        joint_coordinate_format="absolute_pixel_xy",
+                        joint_confidence_threshold=0.5,
+                        persons=pose_persons(result, keypoints),
+                    )
+                else:
+                    boxes = result.boxes
+                    value.update(
+                        boxes=boxes.xyxy.cpu().tolist(),
+                        scores=boxes.conf.cpu().tolist(),
+                        class_ids=[int(v) for v in boxes.cls.cpu().tolist()],
+                    )
                 handle.write(json.dumps(value, allow_nan=False) + "\n")
                 count += 1
         record_model_device(model.predictor.model, device, directory)

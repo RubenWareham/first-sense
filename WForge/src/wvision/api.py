@@ -12,15 +12,16 @@ from wvision.adapters.base import DetectionContext, Initialization
 from wvision.adapters.shared.devices import canonical_device
 from wvision.core.contracts import EvaluationResult, ExportResult, PredictionResult, RunResult
 from wvision.core.model_config import model_reference, training_values
-from wvision.core.registry import detection_adapter
+from wvision.core.registry import vision_adapter
 from wvision.datasets.detection import load_dataset, sha256
+from wvision.datasets.pose import PoseSkeleton, read_person_boxes, restore_skeleton
 from wvision.experiments.artifacts import artifact_reference, operation, write_json
 from wvision.experiments.portable import verify_bundle
 from wvision.training.recovery import resolve_resume, stage_resume
 
 
 class Vision:
-    """Run the registered detection model. Heavy dependencies load only during execution."""
+    """Run a registered vision model. Heavy dependencies load only during execution."""
 
     def __init__(
         self,
@@ -29,7 +30,7 @@ class Vision:
         backend_python: str | Path | None = None,
     ) -> None:
         model_id, self._definition = model_reference(model)
-        self._adapter = detection_adapter(model_id, backend_python)
+        self._adapter = vision_adapter(model_id, backend_python)
         self.model = model_id
         self._backend_python = self._adapter.python
         self._model_config: Path | None = None
@@ -39,6 +40,7 @@ class Vision:
         self._checkpoint_hash: str | None = None
         self._data: Path | None = None
         self._fingerprint: str | None = None
+        self._skeleton: PoseSkeleton | None = None
         self._imgsz = 640
         self._batch = 16
         self._device = "cpu"
@@ -87,6 +89,8 @@ class Vision:
             )
         )
         instance._fingerprint = state["dataset_fingerprint"]
+        if instance._adapter.spec.task == "pose":
+            instance._skeleton = restore_skeleton(state.get("skeleton"))
         instance._imgsz = state["config"]["imgsz"]
         instance._batch = state["config"]["batch"]
         instance._device = state["config"].get("device", "cpu")
@@ -113,7 +117,13 @@ class Vision:
                 "This adapter requires a completed training run for evaluation/prediction"
             )
         return DetectionContext(
-            checkpoint, self._model_config, self._learning, self._imgsz, self._batch, device
+            checkpoint,
+            self._model_config,
+            self._learning,
+            self._imgsz,
+            self._batch,
+            device,
+            skeleton=self._skeleton,
         )
 
     def train(
@@ -125,6 +135,7 @@ class Vision:
         backbone_weights: str | Path | None = None,
         detector_run: str | Path | None = None,
         resume_run: str | Path | None = None,
+        transfer_scope: str = "detector",
         output: str | Path = "runs",
         **overrides: Any,
     ) -> RunResult:
@@ -138,12 +149,13 @@ class Vision:
             Path(backbone_weights) if backbone_weights is not None else None,
             Path(detector_run) if detector_run is not None else None,
             Path(resume_run) if resume_run is not None else None,
+            transfer_scope,
         )
         self._adapter.validate_training(settings, inputs)
         required: tuple[str, ...] = ("train_labeled", "val")
         if settings.learning == "semi_supervised":
             required += ("train_unlabeled",)
-        dataset = load_dataset(data, required)
+        dataset = load_dataset(data, required, task=self._adapter.spec.task)
         initial = self._resolve_checkpoint(checkpoint) if checkpoint else None
         initialization = (
             {
@@ -154,7 +166,11 @@ class Vision:
             if inputs.resume_run
             else self._adapter.initialization(
                 Initialization(
-                    initial, inputs.pretraining_run, inputs.backbone_weights, inputs.detector_run
+                    initial,
+                    inputs.pretraining_run,
+                    inputs.backbone_weights,
+                    inputs.detector_run,
+                    transfer_scope=inputs.transfer_scope,
                 ),
                 dataset,
                 settings,
@@ -191,6 +207,7 @@ class Vision:
             state: dict[str, Any] = {
                 "schema_version": 1,
                 "model": self.model,
+                **({"task": "pose", "skeleton": dataset.skeleton} if dataset.skeleton else {}),
                 "data": str(dataset.manifest),
                 "dataset_fingerprint": dataset.fingerprint,
                 "config": settings.to_dict(),
@@ -211,6 +228,7 @@ class Vision:
         self._model_config_hash = state["model_config_sha256"]
         self._data = dataset.manifest
         self._fingerprint = dataset.fingerprint
+        self._skeleton = dataset.skeleton
         self._imgsz, self._batch = settings.imgsz, settings.batch
         self._learning = settings.learning
         self._device = settings.device
@@ -229,9 +247,10 @@ class Vision:
         *,
         checkpoint: str | Path | None = None,
         device: str | None = None,
+        protocol: str = "native",
         output: str | Path = "runs",
     ) -> EvaluationResult:
-        return self._evaluate("val", data, checkpoint, output, device)
+        return self._evaluate("val", data, checkpoint, output, device, protocol)
 
     def test(
         self,
@@ -239,9 +258,10 @@ class Vision:
         *,
         checkpoint: str | Path | None = None,
         device: str | None = None,
+        protocol: str = "native",
         output: str | Path = "runs",
     ) -> EvaluationResult:
-        return self._evaluate("test", data, checkpoint, output, device)
+        return self._evaluate("test", data, checkpoint, output, device, protocol)
 
     def _evaluate(
         self,
@@ -250,17 +270,43 @@ class Vision:
         checkpoint: str | Path | None,
         output: str | Path,
         device: str | None,
+        protocol: str,
     ) -> EvaluationResult:
+        if not isinstance(protocol, str) or protocol not in {"native", "coco"}:
+            raise ValueError("protocol must be native or coco")
+        if protocol == "coco" and self._adapter.spec.task != "detect":
+            raise ValueError("The shared COCO bbox protocol only supports detection")
         selected_device = canonical_device(self._device if device is None else device)
         self._adapter.spec.require(self._learning, split, selected_device)
         selected = self._resolve_checkpoint(checkpoint)
         source = Path(data) if data is not None else self._data
         if source is None:
             raise ValueError("Provide a dataset manifest or load a completed run")
-        dataset = load_dataset(source, (split,))
-        if self._fingerprint is not None and dataset.fingerprint != self._fingerprint:
+        dataset = load_dataset(source, (split,), task=self._adapter.spec.task)
+        if self._fingerprint is not None and (
+            dataset.fingerprint != self._fingerprint or dataset.skeleton != self._skeleton
+        ):
             raise ValueError(
                 "Dataset changed since training; use a new Vision instance for a new dataset"
+            )
+        if protocol == "coco":
+            from wvision.evaluation.detection import evaluate_predictions, require_evaluator
+
+            require_evaluator()
+            predicted = self.predict(
+                [sample.path for sample in dataset.splits[split]],
+                checkpoint=selected,
+                device=selected_device,
+                score_threshold=0.001,
+                max_detections=100,
+                output=output,
+            )
+            return evaluate_predictions(
+                dataset,
+                predicted.predictions,
+                checkpoint=selected,
+                output=Path(output),
+                split=split,
             )
         self._adapter.check_dependency()
         context = self._context(selected, selected_device)
@@ -293,10 +339,20 @@ class Vision:
         device: str | None = None,
         score_threshold: float | None = None,
         max_detections: int | None = None,
+        person_boxes: str | Path | None = None,
         output: str | Path = "runs",
     ) -> PredictionResult:
         selected_device = canonical_device(self._device if device is None else device)
         self._adapter.spec.require(self._learning, "predict", selected_device)
+        if self._adapter.spec.requires_person_boxes:
+            if person_boxes is None:
+                raise ValueError("This top-down pose model requires person_boxes (pixel xyxy)")
+            if score_threshold is not None or max_detections is not None:
+                raise ValueError(
+                    "Filter person_boxes before passing them to top-down pose prediction"
+                )
+        elif person_boxes is not None:
+            raise ValueError("person_boxes only applies to top-down pose models")
         selected = self._resolve_checkpoint(checkpoint)
         if score_threshold is not None and (
             type(score_threshold) not in (int, float)
@@ -318,12 +374,20 @@ class Vision:
         samples = [p for p in samples if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
         if not samples:
             raise ValueError("Prediction source contains no supported local images")
+        sizes = {}
         for path in samples:
             with Image.open(path) as image:
+                sizes[path] = image.size
                 image.verify()
+        boxes = read_person_boxes(person_boxes, sizes) if person_boxes is not None else None
         self._adapter.check_dependency()
         context = self._context(selected, selected_device)
-        context = replace(context, score_threshold=score_threshold, max_detections=max_detections)
+        context = replace(
+            context,
+            score_threshold=score_threshold,
+            max_detections=max_detections,
+            person_boxes=boxes,
+        )
         with operation(
             output,
             "predict",
@@ -332,6 +396,12 @@ class Vision:
                 "checkpoint": str(selected),
                 "checkpoint_sha256": sha256(selected),
                 "source": description,
+                **(
+                    {"person_boxes": {str(path): rows for path, rows in boxes.items()}}
+                    if boxes is not None
+                    else {}
+                ),
+                **({"skeleton": self._skeleton} if self._skeleton else {}),
                 "score_threshold": score_threshold,
                 "max_detections": max_detections,
                 "device": selected_device,
@@ -345,10 +415,24 @@ class Vision:
             count = self._adapter.predict(samples, context, directory)
         return PredictionResult(directory, directory / "predictions.jsonl", count)
 
-    def export(self, *, format: str = "onnx", output: str | Path = "runs") -> ExportResult:
+    def export(
+        self,
+        *,
+        format: str = "onnx",
+        output: str | Path = "runs",
+        verification_images: list[str | Path] | None = None,
+    ) -> ExportResult:
         """Export the selected checkpoint through a verified model-owned exporter."""
         self._adapter.spec.require_export(format)
         checkpoint = self._resolve_checkpoint(None)
+        if verification_images is not None and not isinstance(verification_images, list):
+            raise ValueError("verification_images must be a list of local image paths")
+        images = tuple(Path(path).resolve(strict=True) for path in (verification_images or []))
+        for path in images:
+            if path.suffix.lower() not in {".png", ".jpg", ".jpeg"}:
+                raise ValueError("Export verification images must be local PNG/JPEG files")
+            with Image.open(path) as image:
+                image.verify()
         with operation(
             output,
             "export",
@@ -358,7 +442,9 @@ class Vision:
                 "checkpoint": str(checkpoint),
                 "checkpoint_sha256": sha256(checkpoint),
                 "imgsz": self._imgsz,
+                "verification_images": [str(path) for path in images],
             },
         ) as directory:
-            model = self._adapter.export(self._context(checkpoint, "cpu"), directory, format)
+            context = replace(self._context(checkpoint, "cpu"), verification_images=images)
+            model = self._adapter.export(context, directory, format)
         return ExportResult(directory, model, directory / "export.json")

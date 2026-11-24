@@ -79,7 +79,13 @@ The fixed installed recipe is `simsiam_resnet50_8xb32-coslr-200e_in1k.py`. Adapt
 
 Downstream transfer requires `backend_options.backbone_style=pytorch`. Both `learning=supervised` and `learning=semi_supervised` are supported; the comparison helper remains supervised. For Soft Teacher, pass `pretraining_run=` to `Vision("models/detection/faster-rcnn-r50/soft-teacher-pytorch-smoke.yaml").train(...)`. Both comparison arms use that style and RGB ImageNet normalization matching the upstream representation recipe. They use the same labeled samples, seed, detector architecture, augmentation, batch, image size, learning rate, and iteration budget. Detection heads initialize randomly. Same seed does not guarantee identical head tensors across different backbone initialization paths. Frozen stages and normalization behavior remain in the saved detector recipe. The earlier M2 comparison defaults to Caffe-style ResNet and is a different protocol.
 
-Only a completed WVision SimSiam run on the exact same dataset fingerprint is accepted. Changing dataset membership or labels requires a new representation run in this initial contract. Checkpoint hashes are checked in the core and again before backend initialization. The adapter checks every backbone key, shape, and dtype, delegates prefix loading to MMEngine, and verifies tensor equality before training. No projection or predictor head is transferred. `transfer.json` records the result. Checkpoints use upstream Python deserialization; only use trusted local runs.
+Only completed, trusted WVision SimSiam runs are accepted. A different target
+dataset or class set is allowed after the [transfer exposure checks](WEIGHT_COMPATIBILITY.md):
+source training images and known groups must not overlap target held-out pools.
+Checkpoint hashes are checked in the core and backend; complete backbone
+keys/shapes/dtypes and loaded tensor equality are verified. Projection/predictor
+heads are excluded. `transfer.json` records source/target fingerprints and the
+overlap audit. Checkpoints use upstream Python deserialization.
 
 ## Data isolation and artifacts
 

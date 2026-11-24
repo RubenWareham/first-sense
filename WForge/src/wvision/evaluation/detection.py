@@ -20,18 +20,22 @@ def require_evaluator() -> None:
 
 
 def evaluate_predictions(
-    dataset: Dataset, predictions: Path, *, checkpoint: Path, output: Path
+    dataset: Dataset, predictions: Path, *, checkpoint: Path, output: Path, split: str = "val"
 ) -> EvaluationResult:
-    """Evaluate exactly the validation samples; no test-based model selection."""
+    """Evaluate exactly one declared held-out split using the shared COCO protocol."""
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
-    samples = dataset.splits["val"]
+    if split not in {"val", "test"}:
+        raise ValueError("Shared evaluation supports val or test only")
+    samples = dataset.splits[split]
     with operation(
         output,
-        "common-val",
+        f"common-{split}",
         {
             "protocol": COCO_PROTOCOL,
+            "split": split,
+            "group_isolation": "verified" if dataset.groups else "unverified: groups not supplied",
             "dataset_fingerprint": dataset.fingerprint,
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": sha256(checkpoint),
@@ -39,7 +43,8 @@ def evaluate_predictions(
             "predictions_sha256": sha256(predictions),
         },
     ) as directory:
-        annotations = dataset.write_coco(directory, ("val",))["val"]
+        write_json(directory / "dataset.json", dataset.snapshot())
+        annotations = dataset.write_coco(directory, (split,))[split]
         coco = COCO(annotations)
         identities = {str(sample.path): index for index, sample in enumerate(samples, 1)}
         seen = set()
@@ -49,7 +54,9 @@ def evaluate_predictions(
             sample = str(Path(row["sample"]).resolve(strict=True))
             if sample not in identities or sample in seen:
                 raise ValueError(
-                    "Comparison predictions contain duplicate or non-validation samples"
+                    "Comparison predictions contain duplicate or "
+                    + ("non-validation" if split == "val" else "non-test")
+                    + " samples"
                 )
             seen.add(sample)
             image_id = identities[sample]
@@ -87,7 +94,7 @@ def evaluate_predictions(
                     }
                 )
         if seen != set(identities):
-            raise ValueError("Comparison predictions are missing validation samples")
+            raise ValueError(f"Comparison predictions are missing {split} samples")
         write_json(directory / "detections.json", detections)
         if detections:
             result = coco.loadRes(detections)
@@ -109,5 +116,21 @@ def evaluate_predictions(
             f"wforge/coco/{key}": float(value)
             for key, value in zip(names, evaluator.stats[:6], strict=True)
         }
+        per_class = {}
+        precision = evaluator.eval["precision"]
+        for index, category in enumerate(evaluator.params.catIds):
+            name = coco.cats[category]["name"]
+            values = precision[:, :, index, 0, -1]
+            ap = float(values[values >= 0].mean()) if (values >= 0).any() else -1.0
+            ap50_values = values[0]
+            ap50 = float(ap50_values[ap50_values >= 0].mean()) if (ap50_values >= 0).any() else -1.0
+            metrics[f"wforge/coco/classes/{name}/bbox_mAP"] = ap
+            metrics[f"wforge/coco/classes/{name}/bbox_mAP_50"] = ap50
+            per_class[name] = {
+                "bbox_mAP": ap,
+                "bbox_mAP_50": ap50,
+                "ground_truth_objects": len(coco.getAnnIds(catIds=[category])),
+            }
+        write_json(directory / "per-class.json", per_class)
         write_json(directory / "metrics.json", metrics)
-    return EvaluationResult(directory, "val", checkpoint, dataset.fingerprint, metrics)
+    return EvaluationResult(directory, split, checkpoint, dataset.fingerprint, metrics)

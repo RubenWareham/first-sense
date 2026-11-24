@@ -35,7 +35,7 @@ def compare_pretraining(
             "Transfer comparison requires supervised learning and backbone_style=pytorch"
         )
     dataset = load_dataset(data, ("train_labeled", "train_unlabeled", "val", "test"))
-    source = load_pretraining(pretraining_run, dataset.fingerprint)
+    source = load_pretraining(pretraining_run, dataset)
     executable = interpreter(backend_python)
     budget = load_budget_metadata(dataset)
     reference: str | Path = definition.path if definition else MODEL_ID

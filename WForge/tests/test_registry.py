@@ -23,10 +23,11 @@ from wvision.models.ultralytics.yolo11 import operations as ultralytics
 def test_catalog_and_cli_are_framework_free() -> None:
     code = (
         "import sys; from wvision import Vision, list_models; "
-        "assert len(list_models()) == 4; Vision('ultralytics/yolo11n'); "
+        "Vision('ultralytics/yolo11n'); Vision('ultralytics/yolo11n-pose'); "
+        "Vision('mmpose/rtmpose-t', backend_python=sys.executable); "
         "Vision('mmdetection/faster-rcnn-r50', backend_python=sys.executable); "
         "Vision('transformers/dinov3-convnext-tiny-detr', backend_python=sys.executable); "
-        "assert not {'torch','transformers','mmdet','ultralytics'} & sys.modules.keys()"
+        "assert not {'torch','transformers','mmdet','mmpose','ultralytics'} & sys.modules.keys()"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
     result = subprocess.run(
@@ -68,7 +69,10 @@ def test_catalog_extension_uses_existing_facade(
     monkeypatch.setattr(ultralytics, "check_dependency", lambda: None)
     called = []
 
-    def train(checkpoint: Any, data: Path, settings: Any, directory: Path) -> dict[str, Any]:
+    def train(
+        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str
+    ) -> dict[str, Any]:
+        assert task == "detect"
         called.append("train")
         weights = directory / "best.pt"
         weights.write_bytes(b"fixture checkpoint, not a model")

@@ -8,13 +8,16 @@ WVision integrates optional upstream packages without copying their model/traini
 | PyTorch | 2.4.1 | [Release license](https://github.com/pytorch/pytorch/blob/v2.4.1/LICENSE) |
 | torchvision | 0.19.1 | [Release license](https://github.com/pytorch/vision/blob/v0.19.1/LICENSE) |
 | MMDetection | 3.3.0 | [Release license](https://github.com/open-mmlab/mmdetection/blob/v3.3.0/LICENSE), Apache-2.0 |
+| MMDeploy (optional MMDetection export) | 1.3.1 | [Release license](https://github.com/open-mmlab/mmdeploy/blob/v1.3.1/LICENSE), Apache-2.0 |
 | MMCV | 2.1.0 | [Release license](https://github.com/open-mmlab/mmcv/blob/v2.1.0/LICENSE), Apache-2.0 |
 | MMEngine | 0.10.7 | [Release license](https://github.com/open-mmlab/mmengine/blob/v0.10.7/LICENSE), Apache-2.0 |
+| MMPose | 1.3.2 | [Release license](https://github.com/open-mmlab/mmpose/blob/v1.3.2/LICENSE), Apache-2.0 |
 | MMPreTrain | 1.2.0 | [Release license](https://github.com/open-mmlab/mmpretrain/blob/v1.2.0/LICENSE), Apache-2.0 |
 | OpenMMLab PyTorch / torchvision | 2.1.0 / 0.16.0 CPU or CUDA 12.1 | [PyTorch license](https://github.com/pytorch/pytorch/blob/v2.1.0/LICENSE), [torchvision license](https://github.com/pytorch/vision/blob/v0.16.0/LICENSE) |
 | Transformers | 5.22.2 | [Release license](https://github.com/huggingface/transformers/blob/v5.22.2/LICENSE), Apache-2.0 |
 | Accelerate | 1.10.1 | [Release license](https://github.com/huggingface/accelerate/blob/v1.10.1/LICENSE), Apache-2.0 |
 | ONNX (optional export) | 1.17.0 | [Release license](https://github.com/onnx/onnx/blob/v1.17.0/LICENSE), Apache-2.0 |
+| ONNX (MMDeploy environment) | 1.13.1 | [Release license](https://github.com/onnx/onnx/blob/v1.13.1/LICENSE), Apache-2.0 |
 | ONNX Runtime (optional verification) | 1.20.1 | [Release license](https://github.com/microsoft/onnxruntime/blob/v1.20.1/LICENSE), MIT |
 | pycocotools (optional shared evaluation) | 2.0.11 | [COCO API license](https://github.com/cocodataset/cocoapi/blob/master/license.txt) |
 | DINOv3 backend PyTorch / torchvision | 2.8.0 / 0.23.0 CPU | [PyTorch license](https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE), [torchvision license](https://github.com/pytorch/vision/blob/v0.23.0/LICENSE) |
@@ -23,6 +26,16 @@ WVision integrates optional upstream packages without copying their model/traini
 The initial integration uses the bundled YOLO11n configuration and random initialization. It distributes no pretrained weights or third-party datasets. User-provided checkpoint terms and supervision sources must be recorded. Generated checkpoints retain upstream license metadata.
 
 The MMDetection integration loads the installed upstream Soft Teacher recipe and reuses upstream Faster R-CNN and teacher-student algorithms. It starts randomly or from explicitly supplied compatible WVision source runs, and distributes no pretrained assets. Runtime recipe adaptation and provenance are documented in the [semi-supervised guide](docs/SEMI_SUPERVISED.md). Upstream source is not vendored into WVision.
+
+Optional ONNX conversion calls MMDeploy's installed exporter, decoding and NMS.
+Small conversion hooks in `faster_rcnn_r50/deployment.py` preserve MMDetection's
+per-pyramid-level proposal NMS and class-specific regression boxes, which the
+generic MMDeploy 1.3.1 rewrites change. Relevant upstream owners are
+[RPN conversion](https://github.com/open-mmlab/mmdeploy/blob/v1.3.1/mmdeploy/codebase/mmdet/models/dense_heads/rpn_head.py)
+and [box-head conversion](https://github.com/open-mmlab/mmdeploy/blob/v1.3.1/mmdeploy/codebase/mmdet/models/roi_heads/bbox_heads/bbox_head.py),
+under MMDeploy's Apache-2.0 license. No upstream model or algorithm source is
+copied. Remove the hooks when an upstream upgrade passes the native-parity
+regressions unchanged. See [export evidence](docs/verification/MMDET_ONNX.md).
 
 The MMPreTrain integration loads its installed SimSiam recipe and trains from random initialization on local unlabeled training images. It optionally supplies that run's backbone to supervised Faster R-CNN using upstream MMEngine initialization. No upstream model, loss, or optimizer implementation is copied, and no external weights are distributed. See [self-supervised usage](docs/SELF_SUPERVISED.md). LOST and TokenCut were assessed but are not integrated or bundled.
 

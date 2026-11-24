@@ -1,5 +1,15 @@
 # Verification evidence
 
+[Supervised 2D pose](POSE.md) records local CPU and CUDA train, evaluation and
+prediction checks on 2026-11-19.
+
+[MMDetection ONNX export](MMDET_ONNX.md) records Faster R-CNN/Soft Teacher
+conversion, real-image parity, strict failure checks, and the postponed official
+DINOv3 weight gate on 2026-11-18.
+
+[Grouped evaluation, cross-dataset transfer, and DINOv3 ONNX](EVALUATION_TRANSFER_EXPORT.md)
+records the 2026-11-18 extension and its real backend checks.
+
 [Training operations and real football checks](TRAINING_OPERATIONS.md) records
 recovery, precision, relocation, YOLO ONNX export, and four-candidate comparison,
 including the remaining multi-GPU and hosted-workflow gates.

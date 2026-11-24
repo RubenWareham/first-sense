@@ -144,7 +144,21 @@ class DinoDETRAdapter:
 
     def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
         self.spec.require_export(format)
-        raise ValueError("DINOv3/DETR inference export is not verified")
+        if context.verification_images:
+            raise ValueError(
+                "DINOv3 export verifies tensor inputs; verification_images is for MMDetection"
+            )
+        result = self.invoke(
+            directory,
+            {
+                "operation": "export",
+                "device": "cpu",
+                "checkpoint": str(context.checkpoint),
+                "model_config": str(context.model_config),
+                "imgsz": context.imgsz,
+            },
+        )
+        return Path(result["model"])
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

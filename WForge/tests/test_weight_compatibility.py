@@ -29,10 +29,7 @@ def test_initialization_rules_are_specific_to_source_scope_and_method() -> None:
         model.require_initialization(
             "mmpretrain/simsiam-r50", "pretraining_run", "semi_supervised", "caffe"
         )
-    for source, kind, learning in (
-        ("ultralytics/yolo11n", "detector_run", "semi_supervised"),
-        (MODEL, "detector_run", "supervised"),
-    ):
+    for source, kind, learning in (("ultralytics/yolo11n", "detector_run", "semi_supervised"),):
         with pytest.raises(ValueError, match="not integrated"):
             model.require_initialization(source, kind, learning)
 
@@ -42,9 +39,7 @@ def test_only_one_initializer_is_accepted() -> None:
         Initialization(pretraining_run=Path("ssl"), detector_run=Path("detector"))
 
 
-@pytest.mark.parametrize(
-    "model", ["ultralytics/yolo11n", "transformers/dinov3-convnext-tiny-detr", MODEL]
-)
+@pytest.mark.parametrize("model", ["ultralytics/yolo11n", "transformers/dinov3-convnext-tiny-detr"])
 def test_unsupported_detector_initialization_fails_before_reading_source(
     manifest: Path, model: str
 ) -> None:
@@ -123,3 +118,29 @@ def test_detector_artifact_incompatibilities_are_rejected(
     write_json(root / "run.json", state)
     with pytest.raises(ValueError):
         detector_source(root, dataset, "caffe")
+
+
+def test_detector_cross_dataset_and_new_class_backbone_transfer(
+    detector_artifact: tuple[Path, Path], tmp_path: Path
+) -> None:
+    import yaml
+    from PIL import Image
+
+    from examples.make_tiny_dataset import create_dataset
+
+    root, _ = detector_artifact
+    manifest = create_dataset(tmp_path / "different")
+    for image in (manifest.parent / "images").iterdir():
+        with Image.open(image) as source_image:
+            source_image.putpixel((0, 0), (254, 0, 254))
+            source_image.save(image)
+    target = load_dataset(manifest, ())
+    assert detector_source(root, target, "caffe")["transfer_data"]["cross_dataset"]
+    config = yaml.safe_load(manifest.read_text())
+    config["classes"] = {0: "new-class", 1: "second-class"}
+    manifest.write_text(yaml.safe_dump(config))
+    target = load_dataset(manifest, ())
+    with pytest.raises(ValueError, match="class map"):
+        detector_source(root, target, "caffe")
+    source = detector_source(root, target, "caffe", "backbone")
+    assert source["scope"] == "backbone" and source["transfer_data"]["cross_dataset"]

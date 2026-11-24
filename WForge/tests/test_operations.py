@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from wvision import Vision, bundle_run, resume
+from wvision.adapters.base import DetectionContext
 from wvision.adapters.shared.checkpoints import checkpoint_files, file_lock, record_checkpoint
 from wvision.adapters.shared.devices import distributed_visibility, validate_devices, worker_context
 from wvision.experiments.artifacts import run_lock, write_json
@@ -158,6 +159,34 @@ def test_inference_bundle_works_without_source_dataset(recoverable: Path, tmp_pa
         bundle_run(recoverable, recoverable / "nested")
 
 
+def test_grouped_bundle_preserves_group_identity(recoverable: Path, tmp_path: Path) -> None:
+    import yaml
+
+    from wvision.datasets.detection import load_dataset
+
+    original = json.loads((recoverable / "run.json").read_text())["data"]
+    dataset = load_dataset(original, ())
+    mapping = {
+        sample.path.relative_to(dataset.root).as_posix(): name
+        for name, pool in dataset.splits.items()
+        for sample in pool
+    }
+    (dataset.root / "groups.yaml").write_text(yaml.safe_dump(mapping))
+    manifest = yaml.safe_load(dataset.manifest.read_text())
+    manifest["groups"] = "groups.yaml"
+    dataset.manifest.write_text(yaml.safe_dump(manifest))
+    grouped = Vision().train(dataset.manifest, output=tmp_path / "grouped")
+    source = load_dataset(dataset.manifest, ())
+    bundle = bundle_run(grouped.artifact_dir, tmp_path / "grouped-bundle", include_data=True)
+    moved = tmp_path / "grouped-moved"
+    assert moved.resolve().is_relative_to(tmp_path.resolve())
+    bundle.rename(moved)
+    restored = Vision.from_run(moved)
+    assert restored._data is not None
+    copied = load_dataset(restored._data, ())
+    assert copied.fingerprint == source.fingerprint and copied.groups == source.groups
+
+
 def test_portable_optimizer_state_resumes_after_relocation(
     recoverable: Path, tmp_path: Path
 ) -> None:
@@ -248,6 +277,15 @@ def test_comparison_retains_metric_namespaces_and_never_ranks_test(tmp_path: Pat
 def test_export_rejects_unsupported_format_before_loading_weights() -> None:
     with pytest.raises(ValueError, match="not integrated"):
         Vision().export(format="tensorrt")
+
+
+def test_mmdet_export_requires_representative_images(tmp_path: Path) -> None:
+    from wvision.core.registry import vision_adapter
+
+    adapter = vision_adapter("mmdetection/faster-rcnn-r50", sys.executable)
+    context = DetectionContext(tmp_path / "weights.pth", None, "supervised", 128, 2)
+    with pytest.raises(ValueError, match="two representative"):
+        adapter.export(context, tmp_path, "onnx")
 
 
 def test_seed_aggregation_preserves_undefined_metrics(tmp_path: Path) -> None:

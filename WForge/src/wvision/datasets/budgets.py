@@ -56,6 +56,7 @@ def prepare_label_budget(
     source_root = dataset.root
     selections: dict[str, Any] = {}
     references = {}
+    groups = {}
     try:
         for name, samples in pools.items():
             listing = []
@@ -63,6 +64,10 @@ def prepare_label_budget(
                 image = target / name / "images" / f"{index}{sample.path.suffix}"
                 stage_sample(sample, image, include_label=name != "train_unlabeled")
                 listing.append(image.relative_to(target).as_posix())
+                if dataset.groups:
+                    groups[listing[-1]] = dataset.groups[
+                        sample.path.relative_to(source_root).as_posix()
+                    ]
             split_file = target / f"{name}.txt"
             split_file.write_text("".join(f"{item}\n" for item in listing), encoding="utf-8")
             references[name] = split_file.name
@@ -79,10 +84,13 @@ def prepare_label_budget(
                     "root": ".",
                     "classes": dataset.classes,
                     "splits": references,
+                    **({"groups": "groups.yaml"} if groups else {}),
                 }
             ),
             encoding="utf-8",
         )
+        if groups:
+            (target / "groups.yaml").write_text(yaml.safe_dump(groups), encoding="utf-8")
         derived = load_dataset(manifest, ("train_labeled", "train_unlabeled", "val"))
         object_counts = {name: 0 for name in dataset.classes.values()}
         image_counts = {name: 0 for name in dataset.classes.values()}

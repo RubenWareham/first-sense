@@ -22,7 +22,7 @@ $env:WVISION_TRANSFORMERS_PYTHON = (Resolve-Path .wvision/transformers-env/Scrip
 
 The [full Windows dependency snapshot](../constraints/windows-transformers-cpu-py312.lock.txt) can replace the constraints file for exact versions. The CPU wheel index is still required for torch/torchvision. It records versions without wheel hashes. The installed backend does not need WVision: the core calls a fixed packaged worker with versioned JSON and no shell. `backend_python=` / `--backend-python` can replace the environment variable and is recorded in the run.
 
-The initial environment is Windows CPU, Python 3.12.3. The current Transformers backbone API requires a newer framework than the earlier integrations; do not upgrade those environments in place. Single-device CUDA is verified in a separate torch 2.8.0+cu128 environment; see [GPU setup](GPU.md). BF16 mixed precision, optimizer-state recovery, portable bundles, and the unverified DDP launcher are described in [training operations](TRAINING_OPERATIONS.md). ONNX export remains unsupported for this adapter.
+The initial environment is Windows CPU, Python 3.12.3. The current Transformers backbone API requires a newer framework than the earlier integrations; do not upgrade those environments in place. Single-device CUDA is verified in a separate torch 2.8.0+cu128 environment; see [GPU setup](GPU.md). BF16 mixed precision, optimizer-state recovery, portable bundles, and the unverified DDP launcher are described in [training operations](TRAINING_OPERATIONS.md). Fixed-shape FP32 ONNX export is verified; install ONNX/ONNX Runtime in this backend as described in the training-operations guide.
 
 ## Explicit random-weight smoke test
 

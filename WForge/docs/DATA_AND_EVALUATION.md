@@ -40,9 +40,17 @@ The [dataset catalog](../datasets/README.md) provides separate runnable example 
 
 Never silently repair or delete source annotations. Report problems with sample references. Any conversion/filtering operation must produce an auditable derived dataset and summary.
 
+An optional manifest `groups: groups.yaml` references a complete mapping of
+dataset-relative image paths to video/match/subject IDs. Preflight rejects any
+group crossing train/validation/test; labeled and unlabeled pools may share a
+training group. Group assignments enter the dataset fingerprint and survive
+label-budget preparation and dataset-containing bundles. The IDs must be accurate
+and consistently named across datasets; filename heuristics are not used. See
+[group preparation](../datasets/README.md#group-separated-evaluation).
+
 ## Label budgets and pseudo-labels
 
-Generate labeled subsets from training data only using a saved seed and explicit selection policy. Store exact labeled and unlabeled sample lists, budget denominator, counts, class distribution, and selection version. Compare methods using identical subsets, splits, initialization policy, and declared compute budgets. Current checked detector/backbone source runs must share the exact target dataset fingerprint. A supervised source must have trained on that same labeled pool, selected only on validation; cross-dataset and external raw detector transfer require a separate protocol. Initialization adds source compute and must not be compared as equal total compute to a random baseline.
+Generate labeled subsets from training data only using a saved seed and explicit selection policy. Store exact labeled/unlabeled lists, denominator, class distribution, and selection version. Compare methods using identical target subsets, splits, initialization policies, and declared compute budgets. Compatible cross-dataset initialization uses the [explicit transfer contract](WEIGHT_COMPATIBILITY.md), preserving source supervision and held-out overlap checks. Source labels and pretraining add annotation/compute exposure and must not be described as equal total budgets to a random baseline. External raw MMDetection detector weights remain unsupported.
 
 Implemented: `prepare_label_budget` / `wvision prepare-budget` creates a new derived dataset with deterministic sample-level selection, unchanged held-out membership, no withheld annotation copies, and a `budget.json` audit record. MMDetection receives run-local COCO conversions, with no ground-truth annotations in its unlabeled file. See [semi-supervised usage](SEMI_SUPERVISED.md) for denominator, grouping, and comparison limitations.
 
@@ -64,10 +72,19 @@ Declare the checkpoint selection metric and direction before training. Tune thre
 
 For each comparison, report dataset/split identity, label budget, pretraining source, model/backbone, image size, augmentation recipe, training steps/epochs, compute/device, seeds, evaluator, and metric settings. Report mean and spread over multiple seeds for quality claims where practical; single-seed runs must say so. Latency results need batch size, precision, hardware, warm-up, synchronization, and whether preprocessing is included.
 
-The multi-model experiment workflow additionally uses one shared `wforge/coco/*` validation protocol across adapters, with explicit score/detection limits and separate native metrics; see [training operations](TRAINING_OPERATIONS.md#multiple-models-and-parameter-grids). Test evaluation is not part of parameter selection.
+The experiment workflow uses one shared `wforge/coco/*` validation protocol, with
+per-class AP50:95/AP50 and original-pixel COCO small/medium/large area metrics.
+`Vision.val(protocol="coco")` and `Vision.test(protocol="coco")` expose that same
+protocol independently; the native evaluator remains the default. Per-class
+ground-truth counts are saved in `per-class.json`; undefined AP remains `-1` and
+is excluded from seed aggregates. Set `require_groups: true` in an experiment
+plan to reject datasets without declared grouping. Reports identify missing
+group evidence. Test evaluation is separate from parameter selection.
 
 ## Required run artifacts
 
 The implementation should save a resolved config, versioned dataset/split manifest and fingerprints, run status, upstream model/weights identity, dependency/environment information, seed/determinism settings, metric definitions and values, checkpoint references, and raw upstream log locations. Record the WVision version and commit when available. Large data and checkpoints stay outside source control.
 
-Future pose metrics must identify skeleton, visibility semantics, and OKS settings. Classification metrics must identify class mapping and averaging policy. Add their exact contracts when those milestones begin.
+The [pose workflow](POSE.md) records its dataset-defined skeleton, visibility semantics
+and native OKS settings. Future classification metrics need class mapping and
+an averaging policy.

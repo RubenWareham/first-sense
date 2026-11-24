@@ -43,7 +43,7 @@ WForge/
     evaluation/            # learning-method and pretraining comparison workflows
     experiments/           # lifecycle, environment, status, artifact writing
     models/
-      ultralytics/yolo11/  # YOLO11n adapter, config, operations
+      ultralytics/yolo11/  # YOLO11n detection and pose adapter, config, operations
       mmdetection/faster_rcnn_r50/  # Faster R-CNN/Soft Teacher + source weights
       mmpretrain/simsiam_r50/      # SimSiam settings, source checks, pretraining worker
       transformers/dinov3_convnext_tiny_detr/  # DETR adapter, local source checks, worker
@@ -126,7 +126,7 @@ forwarding modules or duplicate implementations are retained.
 | `val` | Evaluate the validation split for development and selection |
 | `test` | Evaluate the explicit test split using an already selected checkpoint |
 | `predict` | Return task-specific predictions and optional saved outputs |
-| `export` | Verified YOLO ONNX export; other formats/adapters fail clearly |
+| `export` | Verified YOLO/DINOv3/MMDetection ONNX export; other formats/adapters fail clearly |
 
 Use `val` consistently in Python and CLI. A CLI command should only parse arguments, invoke application logic, and format the result. It must not implement its own training behavior.
 

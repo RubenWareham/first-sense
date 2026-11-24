@@ -348,15 +348,55 @@ and [usage guide](TRAINING_OPERATIONS.md). Real football checks preserve the
 87 labeled / 785 unlabeled / 292 validation / 293 test samples. Short schedules
 verify execution; existing video overlap prevents a generalization claim.
 
+## M3n — Grouped evaluation, flexible transfer, and broader ONNX export
+
+Requested before Pose. The implementation adds explicit group-based dataset
+preparation, shared per-class COCO val/test, held-out exposure checks for
+cross-dataset initialization, and verified DINOv3/DETR ONNX export. See
+[verification and remaining limits](verification/EVALUATION_TRANSFER_EXPORT.md).
+
+- [x] Copy explicit video/match groups into new, isolated datasets; preserve sources.
+- [x] Preserve group identity through label budgets and portable dataset bundles.
+- [x] Require grouping in experiment plans and report per-class AP/seed summaries.
+- [x] Transfer compatible detector weights across datasets or only the backbone
+  to new class sets, with source/target exposure audits.
+- [x] Verify DINOv3/DETR ONNX outputs against native FP32 inference.
+
+Real football quality benchmarking still requires accurate group IDs and longer,
+comparable multi-seed training. Actual two-GPU execution, hosted automation,
+and official pretrained DINOv3 acceptance remain open. MMDetection export is
+covered by M3o below.
+
+## M3o — MMDetection ONNX export and official DINOv3 gate
+
+- [x] Export Faster R-CNN and the selected Soft Teacher inference branch through
+  MMDeploy, retaining per-level proposal NMS and class-specific box regression.
+- [x] Verify Caffe/PyTorch-style backbones, source tensor identity, ordinary ONNX
+  Runtime inference, and complete detection-set parity on representative images.
+- [x] Check a real football checkpoint on three validation images; preserve all
+  source checkpoints and data.
+- [ ] Verify licensed official DINOv3 ConvNeXt Tiny weights. **Postponed by the
+  user on 2026-11-18** until local weights are supplied; no authenticated download
+  or official pretrained accuracy claim.
+
+See [MMDetection ONNX evidence](verification/MMDET_ONNX.md) and the
+[export contract/setup](TRAINING_OPERATIONS.md#faster-r-cnn-and-soft-teacher).
+
 ## M4 — 2D pose estimation
 
-Depends on the detection foundation, earlier learning-mode assessments, and M3m.
+Depends on the detection foundation, earlier learning-mode assessments, M3m, and M3n.
 
-- [ ] Select an existing pose model/backend; reuse an adapter only where actual capabilities permit it.
-- [ ] Add skeleton, keypoint order, visibility, and coordinate contracts.
-- [ ] Implement dataset validation and normalized pose predictions.
-- [ ] Support verified train/val/test/predict operations and documented pose metrics.
-- [ ] Add a real upstream smoke test and a short example.
+YOLO11n-pose supports the supervised FP32 workflow on CPU and single-device CUDA.
+[RTMPose-t](RTMPOSE.md) adds top-down COCO-17 and Halpe-26 through MMPose with
+explicit prediction boxes.
+See the [implementation plan](POSE_PLAN.md), [usage](POSE.md), and
+[verification](verification/POSE.md).
+
+- [x] Select YOLO11n-pose and reuse the existing YOLO11 workflow.
+- [x] Add skeleton, keypoint order, visibility, and coordinate contracts.
+- [x] Implement dataset validation and normalized pose predictions.
+- [x] Verify train/val/test/predict and document pose metrics.
+- [x] Add a real upstream smoke test and a short example.
 
 Exit gate: one existing 2D pose model completes the public workflow with correct keypoint semantics. Semi-supervised or unsupervised pose remains unsupported until separately verified.
 

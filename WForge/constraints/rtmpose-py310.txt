@@ -1,0 +1,9 @@
+# Add to the verified CPU or CUDA PyTorch 2.1.0 OpenMMLab stack.
+mmpose==1.3.2
+xtcocotools==1.14.3
+chumpy==0.70
+mmcv==2.1.0
+mmengine==0.10.7
+mmdet==3.3.0
+numpy==1.26.4
+opencv-python==4.10.0.84

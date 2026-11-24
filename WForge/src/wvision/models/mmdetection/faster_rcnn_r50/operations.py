@@ -86,9 +86,11 @@ def configure(request: dict[str, Any], directory: Path) -> Any:
         )
     detector = request.get("detector")
     if detector:
-        if not semi:
-            raise ValueError("detector_run currently requires Soft Teacher")
         validate_detector_structure(detector, cfg.model.detector)
+        if detector["scope"] == "backbone":
+            cfg.model.detector.backbone.init_cfg = dict(
+                type="Pretrained", checkpoint=detector["checkpoint"], prefix="backbone."
+            )
     if semi:
         cfg.model.semi_train_cfg.update(
             {
@@ -189,7 +191,11 @@ def configure(request: dict[str, Any], directory: Path) -> Any:
             "resume_source": request.get("resume"),
             "initialization": "optimizer-state resume"
             if request.get("resume")
-            else "supervised detector weights"
+            else (
+                "supervised detector backbone; random neck/proposal/detection heads"
+                if detector["scope"] == "backbone"
+                else "complete supervised detector weights"
+            )
             if detector
             else ("SimSiam backbone; random detection heads" if pretraining else "random"),
             "pretraining_data": pretraining,
@@ -233,14 +239,23 @@ def train(request: dict[str, Any], directory: Path) -> dict[str, Any]:
     if request.get("pretraining"):
         verify_transfer(runner, request["pretraining"], directory)
     elif request.get("detector"):
-        initialize_detector(runner, request, directory)
+        if request["detector"]["scope"] == "backbone":
+            verify_transfer(runner, request["detector"], directory)
+        else:
+            initialize_detector(runner, request, directory)
     runner.train()
     record_model_device(
         runner.model, request.get("execution_device", request["config"]["device"]), directory
     )
     if runner.rank != 0:
         return {}
-    best = Path(runner.message_hub.get_info("best_ckpt"))
+    selected = runner.message_hub.get_info("best_ckpt")
+    if selected is None:
+        raise RuntimeError(
+            "Upstream produced no validation-selected checkpoint; inspect validation metrics "
+            "and training stability in backend.log"
+        )
+    best = Path(selected)
     last = Path(runner.work_dir) / f"iter_{request['config']['max_iters']}.pth"
     logs = {
         key: float(history.current()) for key, history in runner.message_hub.log_scalars.items()
@@ -299,7 +314,10 @@ def validate_detector_structure(source: dict[str, Any], target: Any) -> None:
     if hashlib.sha256(config.read_bytes()).hexdigest() != source["model_config_sha256"]:
         raise ValueError("Detector source model configuration content has changed")
     values = json.loads(config.read_text(encoding="utf-8"))
-    if model_structure(values["model"]) != model_structure(target):
+    keys = ("backbone", "data_preprocessor") if source["scope"] == "backbone" else tuple(target)
+    if model_structure({k: values["model"][k] for k in keys}) != model_structure(
+        {k: target[k] for k in keys}
+    ):
         raise ValueError("Detector source structure/preprocessing differs from target detector")
 
 
@@ -360,6 +378,7 @@ def audit_initialization(
                     if scope == "backbone"
                     else "transferred",
                     "optimizer_state_loaded": False,
+                    "data_compatibility": source.get("transfer_data"),
                 },
             )
 
@@ -484,6 +503,17 @@ def main() -> None:
         result = train(request, directory)
     elif request["operation"] in {"val", "test"}:
         result = evaluate(request, directory)
+    elif request["operation"] == "export":
+        try:
+            from deployment import export_detector  # type: ignore[import-not-found]
+        except ImportError as error:
+            raise RuntimeError(
+                "MMDetection export requires its MMDeploy environment; "
+                "see docs/TRAINING_OPERATIONS.md"
+            ) from error
+        result = export_detector(
+            inference_model(request), load_config(request["model_config"]), request, directory
+        )
     elif request["operation"] == "predict":
         result = predict(request, directory)
     else:

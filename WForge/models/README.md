@@ -33,6 +33,8 @@ The existing YAML paths and `Vision("ultralytics/yolo11n")` remain unchanged.
 | Model | Configs | Purpose |
 | --- | --- | --- |
 | YOLO11n | [supervised](detection/yolo11n/supervised.yaml), [smoke](detection/yolo11n/smoke.yaml) | Supervised defaults or one-epoch execution check |
+| YOLO11n-pose | [smoke](pose/yolo11n-pose/smoke.yaml) | One-epoch supervised pose execution check using the dataset's skeleton |
+| RTMPose-t | [smoke](pose/rtmpose-t/smoke.yaml) | One-epoch top-down COCO-17 or Halpe-26 pose check |
 | Faster R-CNN R50-FPN | [supervised](detection/faster-rcnn-r50/supervised.yaml), [supervised smoke](detection/faster-rcnn-r50/supervised-smoke.yaml) | Existing supervised detector |
 | Soft Teacher / Faster R-CNN | [semi-supervised](detection/faster-rcnn-r50/soft-teacher.yaml), [smoke](detection/faster-rcnn-r50/soft-teacher-smoke.yaml), [PyTorch-style smoke](detection/faster-rcnn-r50/soft-teacher-pytorch-smoke.yaml) | Existing labeled/unlabeled method; optional checked detector/backbone initialization |
 | Faster R-CNN / SimSiam transfer | [transfer smoke](detection/faster-rcnn-r50/transfer-smoke.yaml) | Supply a completed SimSiam run through `pretraining_run` |

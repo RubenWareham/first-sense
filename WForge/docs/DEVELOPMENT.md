@@ -58,7 +58,7 @@ Training adds `model-source.json`, the bundled `upstream-model.yaml`, `metrics.j
 
 Validation and test add namespaced upstream metrics. Test inputs are passed as `val` in a separate upstream evaluation config; WVision records the operation as `test`. The training config contains neither test nor unlabeled inputs.
 
-Prediction writes input hashes and `predictions.jsonl`. Inputs are local PNG/JPEG files or a non-recursive directory. URLs, video, and streams are not exposed. Verified YOLO ONNX export is described in [training operations](TRAINING_OPERATIONS.md). Records are written incrementally, but the upstream image-list loader may hold images in memory; this is not a bounded-memory guarantee.
+Prediction writes input hashes and `predictions.jsonl`. Inputs are local PNG/JPEG files or a non-recursive directory. URLs, video, and streams are not exposed. Verified YOLO, DINOv3 and MMDetection ONNX export is described in [training operations](TRAINING_OPERATIONS.md). Records are written incrementally, but the upstream image-list loader may hold images in memory; this is not a bounded-memory guarantee.
 
 Failed/interrupted operations retain their files and record the error type. Recovery is explicit through `resume`; original runs retain absolute references. Use [portable bundles](TRAINING_OPERATIONS.md#portable-bundles) for relocation. There is no automatic cleanup.
 

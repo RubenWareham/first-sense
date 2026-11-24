@@ -1,17 +1,30 @@
 # Weight compatibility and semi-supervised initialization
 
-Implemented paths: supervised Faster R-CNN initialization of upstream Soft Teacher, and SimSiam ResNet-50 backbone initialization of the same method. This extends existing upstream methods; no teacher update, loss, optimizer, or architecture is implemented by WVision. See [execution evidence](verification/INITIALIZATION.md).
+Implemented paths: supervised Faster R-CNN detector or backbone initialization of supervised Faster R-CNN and Soft Teacher, and SimSiam ResNet-50 backbone transfer. Sources can come from another dataset under the checks below. Upstream owns initialization and learning. See [initial execution evidence](verification/INITIALIZATION.md) and [cross-dataset verification](verification/EVALUATION_TRANSFER_EXPORT.md).
 
 ## Contract
 
 Weights are compatible only when their source model, transfer scope, target learning method, architecture, preprocessing, class semantics, and provenance meet the target adapter's requirements. A shared file extension or matching tensor dimensions is insufficient. The registry describes accepted initialization rules; adapters validate source artifacts and the worker checks actual tensors.
 
-The first contract deliberately accepts completed WVision source runs on the exact same dataset fingerprint. Supervised sources use only the declared labeled training pool and validation selection. This prevents initializing a label-budget experiment with a source trained on withheld labels or differently assigned held-out data. Other datasets or external raw checkpoints need a separate audited transfer contract and are not silently accepted.
+Sources must be completed, trusted WVision artifacts with intact checkpoints,
+configuration, and dataset snapshots. Cross-dataset transfer compares source
+training exposure with target validation/test images using decoded-content hashes
+and explicit group IDs when both datasets provide them. Source detector validation
+images are also excluded from target held-out pools for cross-dataset transfer,
+because they influenced source checkpoint selection. Recorded initialization
+exposure is carried forward and checked as well. SimSiam checks its image-only
+training pool. These checks cannot establish the absence of unknown near-duplicates
+or undisclosed external pretraining overlap; missing group evidence is recorded.
+
+For label-efficiency claims, inspect source supervision separately: a source model
+may have used more labeled training images than the target budget. The transfer
+audit establishes held-out separation, not equal annotation or compute budgets.
 
 | Source | Target | Scope | Required checks |
 | --- | --- | --- | --- |
-| WVision SimSiam ResNet-50 | Faster R-CNN supervised or Soft Teacher | Backbone only | Same dataset; PyTorch-style ResNet and RGB normalization; complete backbone state |
-| WVision supervised Faster R-CNN R50-FPN | Soft Teacher | Complete detector into teacher and student | Same dataset/classes; same resolved detector structure, stride style, normalization, and source version; complete detector state |
+| WVision SimSiam ResNet-50 | Faster R-CNN supervised or Soft Teacher | Backbone only | Held-out overlap checks; PyTorch-style ResNet and RGB normalization; complete backbone state |
+| WVision supervised Faster R-CNN R50-FPN | Faster R-CNN supervised or Soft Teacher | Complete detector | Exact class IDs/names and resolved detector structure/preprocessing; held-out overlap and complete tensor-state checks |
+| WVision supervised Faster R-CNN R50-FPN | Faster R-CNN supervised or Soft Teacher with new classes | Backbone only | Explicit `transfer_scope="backbone"`; matching backbone and preprocessing; new neck/proposal/detection heads; held-out overlap checks |
 | Trusted local YOLO11n checkpoint | YOLO11n supervised | Complete model | Existing YOLO architecture checks; external supervision supplied by owner |
 | Local DINOv3 ConvNeXt Tiny safetensors | DETR supervised | Backbone | Existing strict local loader; official pretrained verification remains open |
 
@@ -20,6 +33,25 @@ The table is an integration boundary, not a statement that every model can use e
 ## Public workflow
 
 Use `detector_run=` / `--detector-run`, separate from existing `pretraining_run` and `backbone_weights`. Select at most one initialization source. Source references and hashes are saved, and a failed check never falls back to random weights. `wvision models` exposes each model's accepted `initializations` rules, including source kind, scope, learning mode, and required backbone style.
+
+The default `transfer_scope="detector"` requires identical classes. For a new
+class set, request backbone transfer explicitly:
+
+```python
+from wvision import Vision
+
+model = Vision("models/detection/faster-rcnn-r50/supervised-smoke.yaml")
+run = model.train(
+    "datasets/target.yaml",
+    detector_run="runs/train-<source-id>",
+    transfer_scope="backbone",
+)
+```
+
+Supply an existing target manifest and a compatible completed source run. The
+CLI equivalent uses `--detector-run ... --transfer-scope backbone`. Experiment
+plans accept the same fields under `initialization`. Resume cannot change classes,
+data, or scope; use initialization to begin a fresh target schedule.
 
 ```python
 from wvision import Vision

@@ -58,7 +58,7 @@ strict = true
 files = ["src/wvision"]
 
 [[tool.mypy.overrides]]
-module = ["torch.*", "torchvision.*", "ultralytics.*", "mmcv.*", "mmdet.*", "mmengine.*", "mmpretrain.*",
+module = ["torch.*", "torchvision.*", "ultralytics.*", "mmcv.*", "mmdet.*", "mmengine.*", "mmpretrain.*", "mmdeploy.*", "mmpose.*", "scipy.*",
           "transformers.*", "safetensors.*", "pycocotools.*", "onnx.*", "onnxruntime.*", "numpy.*"]
 ignore_missing_imports = true
 follow_imports = "skip"

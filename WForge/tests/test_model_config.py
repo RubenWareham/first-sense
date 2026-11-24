@@ -14,7 +14,7 @@ from wvision import Vision, compare_learning, compare_pretraining, prepare_label
 from wvision.cli import parser
 from wvision.core.config import load_yaml
 from wvision.core.model_config import ModelConfig, comparison_model
-from wvision.core.registry import detection_adapter, get_model
+from wvision.core.registry import get_model, vision_adapter
 from wvision.datasets.budgets import load_budget_metadata
 from wvision.datasets.detection import load_dataset
 from wvision.models.mmpretrain.simsiam_r50.config import PretrainConfig
@@ -44,7 +44,7 @@ def test_all_catalog_configs_select_valid_registered_settings(path: Path) -> Non
         PretrainConfig.resolve(definition.training())
     else:
         python = None if spec.backend == "ultralytics" else sys.executable
-        adapter = detection_adapter(spec.model_id, python)
+        adapter = vision_adapter(spec.model_id, python)
         settings = adapter.resolve(definition.training())
         spec.require(settings.learning, "train", settings.device)
 
@@ -65,7 +65,10 @@ def test_constructor_settings_overrides_and_self_contained_run(
     )
     monkeypatch.setattr(ultralytics, "check_dependency", lambda: None)
 
-    def train(checkpoint: Any, data: Path, settings: Any, directory: Path) -> dict[str, Any]:
+    def train(
+        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str
+    ) -> dict[str, Any]:
+        assert task == "detect"
         assert settings.epochs == 1 and settings.imgsz == 128 and settings.batch == 2
         assert settings.backend_options == {"mixup": 0.3}
         saved = directory / "best.pt"
@@ -80,8 +83,10 @@ def test_constructor_settings_overrides_and_self_contained_run(
         imgsz: int,
         batch: int,
         device: str = "cpu",
+        *,
+        task: str,
     ) -> dict[str, float]:
-        assert imgsz == 128 and batch == 2
+        assert imgsz == 128 and batch == 2 and task == "detect"
         return {"fixture/AP": 0.0}
 
     monkeypatch.setattr(ultralytics, "train", train)

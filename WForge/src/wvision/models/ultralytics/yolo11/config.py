@@ -1,4 +1,4 @@
-"""Validated settings for the registered YOLO11n detection workflow."""
+"""Validated training settings shared by YOLO11n detection and pose."""
 
 import math
 from dataclasses import asdict, dataclass, field
@@ -28,7 +28,7 @@ class TrainConfig:
         if self.learning != "supervised":
             raise ValueError(
                 f"Learning mode {self.learning!r} is not integrated. This adapter supports "
-                "supervised YOLO detection only; inspect 'wvision models' for other workflows."
+                "supervised training only; inspect 'wvision models' for other workflows."
             )
         for name in ("epochs", "imgsz", "batch"):
             value = getattr(self, name)

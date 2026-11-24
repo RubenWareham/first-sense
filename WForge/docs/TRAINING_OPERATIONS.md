@@ -46,6 +46,10 @@ same `checkpoint`, `pretraining_run`, `backbone_weights`, or `detector_run` sour
 as `Vision.train`; compatibility checks still apply. An entry containing `run`
 instead of `model` evaluates an existing completed run, with no grid/training fields.
 
+For compatible detector-run sources, `initialization.transfer_scope` selects
+`detector` (default, identical classes) or `backbone` (new target heads/classes).
+See the [cross-dataset transfer contract](WEIGHT_COMPATIBILITY.md).
+
 Jobs run sequentially to avoid accidental GPU oversubscription. Every job retains
 its configuration, checkpoints, log, and validation artifacts. The collection
 updates `comparison.json`, `comparison.csv`, and `comparison.html` after each
@@ -76,6 +80,30 @@ It retains that backend's native test protocol. The experiment command does not
 evaluate or rank candidates on test metrics. Dataset integrity preflight still
 checks every declared split. Video/match grouping remains the dataset owner's
 responsibility; this workflow does not change your splits or establish accuracy.
+
+To require group evidence, add `require_groups: true` at the plan's top level.
+The manifest must contain complete, isolated group assignments; use
+[group preparation](../datasets/README.md#group-separated-evaluation) before training.
+[The grouped comparison plan](../examples/grouped-experiments.yaml) illustrates
+multiple models and three seeds on one prepared label budget. Its profiles are
+starting points; budgets are not compute-matched or benchmark-tuned.
+
+Shared COCO reports include per-class AP50:95/AP50 (for example Ball, Player,
+and Referee), plus small/medium/large area metrics. Ground-truth object counts
+are saved in `per-class.json`. HTML/JSON report whether the supplied group
+assignments were verified; missing groups are explicitly unverified. Seed
+means/sample standard deviations still use the same target protocol.
+
+The same shared protocol is available for explicit final evaluation:
+
+```powershell
+python -m wvision val --run runs/train-<id> --protocol coco
+python -m wvision test --run runs/train-<id> --protocol coco
+```
+
+Python uses `model.val(protocol="coco")` / `model.test(protocol="coco")`.
+The native evaluator remains the default. A test report never feeds back into
+the experiment command's selection or seed aggregates.
 
 Python entry point:
 
@@ -216,22 +244,83 @@ the destination shallow when preserving long legacy source filenames.
 
 ## ONNX export
 
-Verified ONNX export currently covers YOLO11n. Other adapters reject ONNX export;
-their native portable bundles remain available. Export is separate from a local
-runtime integration and does not add TensorRT, C++, or video/streaming support.
+Verified ONNX export covers YOLO11n, DINOv3 ConvNeXt Tiny/DETR, and MMDetection
+Faster R-CNN / Soft Teacher through pinned MMDeploy. Native portable bundles
+remain available for all registered training workflows.
+Export does not add TensorRT, C++, or video/streaming runtime integration.
 
 ```powershell
 python -m pip install -e ".[onnx]"
 python -m wvision export --run runs/train-<id> --format onnx
 ```
 
-The exporter uses the selected checkpoint, fixed input size, batch one, FP32,
-opset 17, and no simplifier. ONNX checker and CPU ONNX Runtime verify raw outputs
-against the native FP32 model on two deterministic inputs (`rtol=1e-3`, `atol=1e-4`).
+All exporters use the selected checkpoint, fixed input size, batch one, FP32,
+opset 17, and no simplifier. For YOLO and DINOv3, ONNX checker and CPU ONNX Runtime
+verify raw outputs against the native FP32 model on two deterministic inputs
+(`rtol=1e-3`, `atol=1e-4`). These two exporters reject `verification_images`.
 `export.json` records hashes, class map, tensor shapes, preprocessing, tolerances,
-and observed error. The raw output contains input-pixel `xywh` boxes and class
-scores; NMS is not embedded. Consumers must follow the manifest's RGB/NCHW,
-resize/letterbox, normalization, and postprocessing contract.
+and observed error. The model-specific contracts are:
+
+| Model | Preprocessing | Raw output |
+| --- | --- | --- |
+| YOLO11n | RGB/NCHW, letterbox, normalize to 0–1 | Input-pixel `xywh` boxes and class scores; no NMS |
+| DINOv3/DETR | RGB/NCHW, fixed square PIL bilinear resize, divide by 255, ImageNet mean/std; int64 all-ones pixel mask | Query class logits including the final no-object class, and normalized `cxcywh` boxes; no NMS |
+
+For DINOv3, install export dependencies **in its compatible backend environment**:
+
+```powershell
+.wvision/transformers-env/Scripts/python -m pip install onnx==1.17.0 onnxruntime==1.20.1
+python -m wvision export --run runs/train-<id> --backend-python .wvision/transformers-env/Scripts/python
+```
+
+Replace the backend executable with your CPU/CUDA environment from the DINOv3
+guide. The DINOv3 manifest describes softmax/no-object handling and conversion of
+normalized boxes back to original image dimensions. Inputs/shapes are fixed;
+dynamic shapes and varying padding masks are not verified. Consumers must follow
+the exported model's own manifest rather than sharing YOLO postprocessing.
+
+### Faster R-CNN and Soft Teacher
+
+Prepare a separate Python 3.10 MMDetection environment using the verified
+[CPU setup](SEMI_SUPERVISED.md) or [CUDA setup](GPU.md), then add its export pins.
+Use `.wvision/mmdeploy-env` as the environment directory in those setup commands.
+Do not mix these ONNX/protobuf versions with the DINOv3 environment:
+
+```powershell
+.wvision/mmdeploy-env/Scripts/python -m pip install -c constraints/mmdeploy-py310.txt mmdeploy onnx onnxruntime protobuf
+python -m wvision export --run runs/train-<id> --backend-python .wvision/mmdeploy-env/Scripts/python --verification-images validation/frame1.jpg validation/frame2.jpg
+```
+
+Python accepts `model.export(verification_images=["frame1.jpg", "frame2.jpg"])`.
+Supply at least two distinct representative PNG/JPEG images, preferably covering
+every class and relevant scene type. Verification never trains or selects weights;
+use training/validation images so test data stays reserved for final evaluation.
+At least one image must produce native detections. Every supplied image must pass;
+there is no option to label a failed export as verified.
+
+The selected detector is exported unchanged. Soft Teacher uses the configured
+inference branch (normally `teacher`), with an exact tensor-state check after
+extracting the plain Faster R-CNN. Both Caffe-style and PyTorch-style R50 backbones
+are covered. MMDeploy conversion hooks preserve native per-pyramid-level RPN NMS
+and class-specific regression boxes; see [verification](verification/MMDET_ONNX.md).
+
+Preprocessing resizes to a fixed square using OpenCV bilinear interpolation,
+without preserving aspect ratio, then applies the manifest's RGB/BGR ordering,
+mean and standard deviation to 0–255 pixels. The graph takes float32 NCHW input
+and includes decoding and NMS. Outputs are `dets` (xyxy input-pixel boxes plus
+scores) and zero-based `labels`; ignore padded rows with score zero. Multiply x
+by original-width/input-width and y by original-height/input-height to rescale.
+Read `export.json` for the exact model's contract and thresholds.
+
+Verification uses ordinary CPU ONNX Runtime without custom operator registration.
+It compares complete detection sets within each class, allowing ordering changes;
+box tolerances are `rtol=1e-4`, `atol=1e-3` pixels, and score tolerances are
+`rtol=1e-3`, `atol=1e-4`. Different classes/counts, nonfinite outputs, or custom
+ONNX domains fail. Floating-point proposal/NMS ties can change discrete decisions
+on other inputs: calibration evidence covers the supplied images, not every
+possible image. A failed comparison retains diagnostic artifacts with failed run
+status and no verified `export.json`. Dynamic shapes, larger batches, other
+precisions and inference accelerators remain unverified.
 
 ## Backend automation
 

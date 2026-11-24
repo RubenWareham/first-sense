@@ -55,7 +55,9 @@ class MMDetection:
                 settings.to_dict()["backend_options"].get("backbone_style", "caffe"),
             )
         if inputs.detector_run is not None:
-            self.spec.require_initialization(self.spec.model_id, "detector_run", settings.learning)
+            self.spec.require_initialization(
+                self.spec.model_id, "detector_run", settings.learning, scope=inputs.transfer_scope
+            )
 
     def initialization(
         self, inputs: Initialization, dataset: Dataset, settings: DetectionSettings
@@ -68,13 +70,13 @@ class MMDetection:
             )
         if inputs.detector_run is not None:
             rule = self.spec.require_initialization(
-                self.spec.model_id, "detector_run", settings.learning
+                self.spec.model_id, "detector_run", settings.learning, scope=inputs.transfer_scope
             )
         return {
-            "pretraining": load_pretraining(inputs.pretraining_run, dataset.fingerprint)
+            "pretraining": load_pretraining(inputs.pretraining_run, dataset)
             if inputs.pretraining_run
             else None,
-            "detector": detector_source(inputs.detector_run, dataset, style)
+            "detector": detector_source(inputs.detector_run, dataset, style, inputs.transfer_scope)
             if inputs.detector_run
             else None,
             "compatibility": asdict(rule) if rule else None,
@@ -147,9 +149,24 @@ class MMDetection:
 
     def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
         self.spec.require_export(format)
-        raise ValueError(
-            "MMDetection inference export requires a verified upstream deployment adapter"
+        if len(set(context.verification_images)) < 2:
+            raise ValueError(
+                "MMDetection export requires at least two representative verification_images"
+            )
+        result = invoke(
+            self.python,
+            directory,
+            {
+                "operation": "export",
+                "device": "cpu",
+                "learning": context.learning,
+                "checkpoint": str(context.checkpoint),
+                "model_config": str(context.model_config),
+                "imgsz": context.imgsz,
+                "verification_images": [str(path) for path in context.verification_images],
+            },
         )
+        return Path(result["model"])
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

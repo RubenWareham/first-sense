@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from wvision.adapters.shared.devices import device_family
 from wvision.datasets.detection import Dataset
+from wvision.datasets.pose import PoseSkeleton
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class ModelSpec:
     notes: str
     initializations: tuple[InitializationRule, ...] = ()
     exports: tuple[str, ...] = ()
+    requires_person_boxes: bool = False
 
     def require_export(self, format: str) -> None:
         if format not in self.exports:
@@ -47,11 +49,13 @@ class ModelSpec:
         source_kind: str,
         learning: str,
         backbone_style: str | None = None,
+        scope: str | None = None,
     ) -> InitializationRule:
         rules = [
             r
             for r in self.initializations
             if (r.source_model, r.source_kind, r.learning) == (source_model, source_kind, learning)
+            and (scope is None or r.scope == scope)
         ]
         if not rules:
             raise ValueError(
@@ -95,8 +99,16 @@ class Initialization:
     backbone_weights: Path | None = None
     detector_run: Path | None = None
     resume_run: Path | None = None
+    transfer_scope: str = "detector"
 
     def __post_init__(self) -> None:
+        if not isinstance(self.transfer_scope, str) or self.transfer_scope not in {
+            "detector",
+            "backbone",
+        }:
+            raise ValueError("transfer_scope must be detector or backbone")
+        if self.transfer_scope != "detector" and self.detector_run is None:
+            raise ValueError("transfer_scope applies only to detector_run initialization")
         if (
             sum(
                 value is not None
@@ -131,6 +143,9 @@ class DetectionContext:
     device: str = "cpu"
     score_threshold: float | None = None
     max_detections: int | None = None
+    verification_images: tuple[Path, ...] = ()
+    skeleton: PoseSkeleton | None = None
+    person_boxes: dict[Path, list[list[float]]] | None = None
 
 
 class DetectionAdapter(Protocol):

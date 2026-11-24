@@ -37,11 +37,13 @@ underlying frameworks.
   pretrain SimSiam on unlabeled images and transfer its backbone into a detector.
   Compare these workflows against supervised or random-initialization baselines.
 - **Continue and move your work:** use checkpoint recovery, mixed precision on
-  supported GPUs, portable run bundles, and verified YOLO ONNX export.
+  supported GPUs, portable run bundles, and verified YOLO, DINOv3, and MMDetection ONNX export.
 
 | Model / method | Current workflow |
 | --- | --- |
 | YOLO11n | Supervised object detection and local-checkpoint fine-tuning |
+| YOLO11n-pose | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton |
+| RTMPose-t | Supervised top-down 2D pose with COCO-17 or Halpe-26 |
 | Faster R-CNN / Soft Teacher | Supervised and semi-supervised object detection |
 | SimSiam ResNet-50 | Self-supervised representation pretraining and checked detector transfer |
 | DINOv3 ConvNeXt Tiny / DETR | Supervised detection with random or supplied local backbone weights |
@@ -57,9 +59,9 @@ applications**, including local and edge devices. That means optimizing and
 measuring accuracy, memory use, and latency on the hardware where a model will
 run, alongside making training easier.
 
-Current work provides training, evaluation, portable artifacts, and YOLO ONNX
+Current work provides training, evaluation, portable artifacts, and YOLO/DINOv3/MMDetection ONNX
 export. Real-time runtime integration and deployment optimization are planned,
-along with pose estimation and classification. Follow the
+along with classification. Follow the
 [roadmap](WForge/docs/MILESTONES.md) and [project mission](PROJECT_MISSION.md).
 
 ## Get started
@@ -157,6 +159,10 @@ Faster R-CNN and requires its OpenMMLab environment. See
 [experiment plans](WForge/docs/TRAINING_OPERATIONS.md#multiple-models-and-parameter-grids)
 for backend selection, initialization, and grid options.
 
+For football/video evaluation, use [explicit match/video groups](WForge/datasets/README.md#group-separated-evaluation)
+and set `require_groups: true` in your experiment plan. Shared COCO reports include
+per-class scores; `val` and `test` also accept `--protocol coco`.
+
 ### 4. Use unlabeled images
 
 WForge supports both **semi-supervised learning** (labeled and unlabeled images
@@ -177,6 +183,10 @@ to pretrain, transfer the backbone, and compare against random initialization.
 The [GPU example](WForge/examples/gpu_semi_supervised.py) combines SimSiam
 pretraining with Soft Teacher training.
 
+Compatible Faster R-CNN and SimSiam sources can transfer across datasets after
+held-out exposure checks. Use `--transfer-scope backbone` with a detector run
+when target classes change; see [transfer rules](WForge/docs/WEIGHT_COMPATIBILITY.md).
+
 ### 5. Resume, bundle, or export a run
 
 ```powershell
@@ -187,15 +197,16 @@ python -m wvision export --run runs/train-<id> --format onnx
 ```
 
 For YOLO, `--epochs 50` means 50 total epochs. OpenMMLab and DINOv3 use
-`--max-iters`. ONNX export currently covers YOLO; native bundles support the
-other integrated families. See [training operations](WForge/docs/TRAINING_OPERATIONS.md)
+`--max-iters`. ONNX export covers YOLO, DINOv3/DETR, and Faster R-CNN/Soft Teacher;
+MMDetection export requires representative verification images. Native bundles cover the
+MMDetection workflows. See [training operations](WForge/docs/TRAINING_OPERATIONS.md)
 for precision settings, portable data/optimizer state, and recovery requirements.
 
 ## Status and further reading
 
 First Sense is an alpha project. Actual two-GPU execution, hosted backend
 automation, and official pretrained DINOv3 acceptance remain verification gates.
-Real-time deployment, pose, classification, and fully unsupervised detection
+Real-time deployment, classification, and fully unsupervised detection
 remain roadmap work. Current evidence is in the
 [verification index](WForge/docs/verification/README.md).
 

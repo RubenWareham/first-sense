@@ -72,19 +72,18 @@ def test_staged_pretraining_has_no_annotations_or_heldout_images(
 
     monkeypatch.setattr("wvision.training.pretraining.invoke", inspect)
     result = pretrain(derived, backend_python=sys.executable, output=tmp_path / "runs")
-    state = load_pretraining(result.artifact_dir, dataset.fingerprint)
+    state = load_pretraining(result.artifact_dir, dataset)
     assert state["selection"] == "final_iteration"
     assert state["training_images"] == [s.pixel_hash for s in dataset.splits["train_unlabeled"]]
     with pytest.raises(ValueError, match="representation run"):
         Vision.from_run(result.artifact_dir)
-    with pytest.raises(ValueError, match="identity differs"):
-        load_pretraining(result.artifact_dir, "other")
+    assert state["transfer_data"]["cross_dataset"] is False
     result.checkpoint.write_bytes(b"changed")
     with pytest.raises(ValueError, match="checkpoint content has changed"):
-        load_pretraining(result.artifact_dir, dataset.fingerprint)
+        load_pretraining(result.artifact_dir, dataset)
     write_json(result.artifact_dir / "status.json", {"status": "failed"})
     with pytest.raises(ValueError, match="completed"):
-        load_pretraining(result.artifact_dir, dataset.fingerprint)
+        load_pretraining(result.artifact_dir, dataset)
 
 
 @pytest.mark.parametrize(

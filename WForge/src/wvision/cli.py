@@ -21,6 +21,7 @@ from wvision.core.contracts import (
 )
 from wvision.core.registry import list_models
 from wvision.datasets.budgets import prepare_label_budget
+from wvision.datasets.groups import prepare_group_split
 from wvision.evaluation.learning import compare_learning
 from wvision.evaluation.pretraining import compare_pretraining
 from wvision.experiments.comparison import run_experiments
@@ -34,13 +35,14 @@ def parser() -> argparse.ArgumentParser:
     root.add_argument("--version", action="version", version="wvision 0.1.0.dev0")
     commands = root.add_subparsers(dest="operation", required=True)
     commands.add_parser("models", help="List exact models and supported capability combinations")
-    train = commands.add_parser("train", help="Train a registered detection model")
+    train = commands.add_parser("train", help="Train a registered vision model")
     train.add_argument(
         "--model", default="ultralytics/yolo11n", help="Registered ID or model YAML path"
     )
     train.add_argument("--data", required=True, type=Path)
     train.add_argument("--checkpoint", type=Path)
     train.add_argument("--resume-run", type=Path)
+    train.add_argument("--transfer-scope", choices=("detector", "backbone"), default="detector")
     train.add_argument("--pretraining-run", type=Path)
     train.add_argument("--backbone-weights", type=Path)
     train.add_argument(
@@ -62,8 +64,13 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--data", type=Path, help="Dataset location for a portable run")
         command.add_argument("--device", help="Override the run device, e.g. cpu or cuda:0")
         command.add_argument("--output", default=Path("runs"), type=Path)
+        if name in {"val", "test"}:
+            command.add_argument("--protocol", choices=("native", "coco"), default="native")
         if name == "predict":
             command.add_argument("--source", required=True, type=Path)
+            command.add_argument(
+                "--person-boxes", type=Path, help="JSON of pixel xyxy boxes for top-down pose"
+            )
     budget = commands.add_parser(
         "prepare-budget", help="Create training-only labeled/unlabeled subsets"
     )
@@ -71,6 +78,14 @@ def parser() -> argparse.ArgumentParser:
     budget.add_argument("--destination", required=True, type=Path)
     budget.add_argument("--labeled-count", required=True, type=int)
     budget.add_argument("--seed", default=0, type=int)
+    grouped = commands.add_parser(
+        "prepare-groups", help="Copy explicit video/match-separated splits"
+    )
+    grouped.add_argument("--data", required=True, type=Path)
+    grouped.add_argument("--groups", required=True, type=Path)
+    grouped.add_argument("--destination", required=True, type=Path)
+    grouped.add_argument("--val-groups", required=True, nargs="+")
+    grouped.add_argument("--test-groups", required=True, nargs="+")
     compare = commands.add_parser(
         "compare", help="Compare supervised Faster R-CNN and Soft Teacher"
     )
@@ -136,6 +151,7 @@ def parser() -> argparse.ArgumentParser:
     export.add_argument("--format", choices=("onnx",), default="onnx")
     export.add_argument("--output", default=Path("runs"), type=Path)
     export.add_argument("--backend-python", type=Path)
+    export.add_argument("--verification-images", nargs="+", type=Path)
     return root
 
 
@@ -158,6 +174,18 @@ def main(argv: list[str] | None = None) -> int:
         with redirect_stdout(sys.stderr):
             if args.operation == "models":
                 result = [asdict(spec) for spec in list_models()]
+            elif args.operation == "prepare-groups":
+                result = {
+                    "data": str(
+                        prepare_group_split(
+                            args.data,
+                            args.destination,
+                            groups=args.groups,
+                            val_groups=args.val_groups,
+                            test_groups=args.test_groups,
+                        )
+                    )
+                }
             elif args.operation == "resume":
                 result = resume(
                     args.run,
@@ -184,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = Vision.from_run(args.run, backend_python=args.backend_python).export(
                     format=args.format,
                     output=args.output,
+                    verification_images=args.verification_images,
                 )
             elif args.operation == "compare-pretraining":
                 overrides = {
@@ -285,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
                     pretraining_run=args.pretraining_run,
                     backbone_weights=args.backbone_weights,
                     detector_run=args.detector_run,
+                    transfer_scope=args.transfer_scope,
                     output=args.output,
                     **overrides,
                 )
@@ -293,11 +323,20 @@ def main(argv: list[str] | None = None) -> int:
                     args.run, backend_python=args.backend_python, data=args.data
                 )
                 if args.operation == "predict":
-                    result = model.predict(args.source, output=args.output, device=args.device)
+                    result = model.predict(
+                        args.source,
+                        output=args.output,
+                        device=args.device,
+                        person_boxes=args.person_boxes,
+                    )
                 elif args.operation == "val":
-                    result = model.val(output=args.output, device=args.device)
+                    result = model.val(
+                        output=args.output, device=args.device, protocol=args.protocol
+                    )
                 else:
-                    result = model.test(output=args.output, device=args.device)
+                    result = model.test(
+                        output=args.output, device=args.device, protocol=args.protocol
+                    )
         payload = result if isinstance(result, (dict, list)) else asdict(result)
         print(json.dumps(payload, default=str, allow_nan=False))
         return 0

@@ -1,0 +1,19 @@
+# Prepare an explicitly grouped dataset and then a training-only label budget.
+# Requires compatible YOLO and OpenMMLab environments; see docs/TRAINING_OPERATIONS.md.
+# These existing profiles are starting points, not tuned or compute-matched recipes.
+schema_version: 1
+data: ../.wvision/football-budget/dataset.yaml
+require_groups: true
+experiments:
+  - name: yolo
+    model: ../models/detection/yolo11n/supervised.yaml
+    grid:
+      seed: [0, 1, 2]
+  - name: faster-rcnn
+    model: ../models/detection/faster-rcnn-r50/supervised.yaml
+    grid:
+      seed: [0, 1, 2]
+  - name: soft-teacher
+    model: ../models/detection/faster-rcnn-r50/soft-teacher.yaml
+    grid:
+      seed: [0, 1, 2]

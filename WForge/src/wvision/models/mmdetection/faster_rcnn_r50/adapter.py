@@ -10,9 +10,8 @@ from wvision.adapters.base import (
     DetectionSettings,
     Initialization,
     ModelSpec,
-    TrainingOutput,
 )
-from wvision.adapters.openmmlab.backend import interpreter
+from wvision.adapters.openmmlab.detector import MMDetectionAdapter
 from wvision.adapters.shared.process import invoke_worker
 from wvision.datasets.detection import Dataset
 from wvision.models.mmdetection.faster_rcnn_r50.config import MMDetConfig
@@ -20,16 +19,9 @@ from wvision.models.mmdetection.faster_rcnn_r50.weights import detector_source
 from wvision.models.mmpretrain.simsiam_r50.adapter import load_pretraining
 
 
-class MMDetection:
-    checkpoint_suffix = ".pth"
-    external_checkpoint = False
-    needs_model_config = True
-    evaluator = "mmdetection/pycocotools"
-    max_detections = 100
-
-    def __init__(self, spec: ModelSpec, python: str | Path | None) -> None:
-        self.spec = spec
-        self.python = interpreter(python)
+class MMDetection(MMDetectionAdapter):
+    def _invoke(self, directory: Path, request: dict[str, Any]) -> dict[str, Any]:
+        return invoke(self.python, directory, request)
 
     def resolve(self, values: dict[str, Any]) -> MMDetConfig:
         return MMDetConfig.resolve(values)
@@ -82,79 +74,13 @@ class MMDetection:
             "compatibility": asdict(rule) if rule else None,
         }
 
-    def check_dependency(self) -> None:
-        # The isolated worker checks exact dependencies before importing model code.
-        pass
-
-    def train(
-        self,
-        dataset: Dataset,
-        settings: DetectionSettings,
-        initialization: dict[str, Any],
-        directory: Path,
-    ) -> TrainingOutput:
-        names = ("train_labeled", "val") + (
-            ("train_unlabeled",) if settings.learning == "semi_supervised" else ()
-        )
-        result = invoke(
-            self.python,
-            directory,
-            {
-                "operation": "train",
-                "config": settings.to_dict(),
-                "data": dataset.write_coco(directory, names),
-                "classes": [dataset.classes[key] for key in sorted(dataset.classes)],
-                **initialization,
-            },
-        )
-        return TrainingOutput(
-            Path(result["best"]),
-            Path(result["last"]),
-            result["metrics"],
-            Path(result["model_config"]),
-        )
-
-    def evaluate(
-        self, dataset: Dataset, split: str, context: DetectionContext, directory: Path
-    ) -> dict[str, float]:
-        result = invoke(
-            self.python,
-            directory,
-            {
-                "operation": split,
-                "device": context.device,
-                "checkpoint": str(context.checkpoint),
-                "model_config": str(context.model_config),
-                "classes": [dataset.classes[key] for key in sorted(dataset.classes)],
-                "data": dataset.write_coco(directory, (split,))[split],
-            },
-        )
-        return dict(result["metrics"])
-
-    def predict(self, samples: list[Path], context: DetectionContext, directory: Path) -> int:
-        result = invoke(
-            self.python,
-            directory,
-            {
-                "operation": "predict",
-                "device": context.device,
-                "checkpoint": str(context.checkpoint),
-                "model_config": str(context.model_config),
-                "source": [str(path) for path in samples],
-                "score_threshold": context.score_threshold,
-                "max_detections": context.max_detections,
-            },
-        )
-        return int(result["sample_count"])
-
     def export(self, context: DetectionContext, directory: Path, format: str) -> Path:
         self.spec.require_export(format)
         if len(set(context.verification_images)) < 2:
             raise ValueError(
                 "MMDetection export requires at least two representative verification_images"
             )
-        result = invoke(
-            self.python,
+        result = self._invoke(
             directory,
             {
                 "operation": "export",

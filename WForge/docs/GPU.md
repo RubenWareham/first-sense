@@ -1,8 +1,8 @@
 # NVIDIA GPU training
 
-Single-device CUDA execution is available for **YOLO11n**, **DINOv3 ConvNeXt Tiny /
-DETR**, **MMDetection Faster R-CNN / Soft Teacher**, and **MMPreTrain SimSiam**,
-including their checked initialization paths. CPU remains the default. WVision delegates
+Single-device CUDA execution is available for **YOLO11 detection and pose**,
+**DINOv3 ConvNeXt Tiny / DETR**, **Faster R-CNN / Soft Teacher**, **SimSiam**,
+**RTMDet**, and **RTMPose**. CPU remains the default. WVision delegates
 training, losses, teacher updates, and optimization to upstream code.
 
 The initial CUDA environment is Windows, Python 3.10, torch 2.1.0+cu121,
@@ -14,9 +14,9 @@ Each backend keeps its own compatible environment:
 
 | Backend | Python | torch / torchvision | CUDA wheel index |
 | --- | --- | --- | --- |
-| YOLO11n, in process | 3.12 | 2.4.1 / 0.19.1 | `cu124` |
+| YOLO11 detection and pose, in process | 3.12 | 2.4.1 / 0.19.1 | `cu124` |
 | DINOv3/DETR, isolated worker | 3.12 | 2.8.0 / 0.23.0 | `cu128` |
-| Faster R-CNN / Soft Teacher / SimSiam, isolated worker | 3.10 | 2.1.0 / 0.16.0 | `cu121` |
+| Faster R-CNN / Soft Teacher / SimSiam / RTMDet / RTMPose, isolated workers | 3.10 | 2.1.0 / 0.16.0 | `cu121` |
 
 Do not replace one environment's torch packages to satisfy another backend.
 Mixed precision and optimizer-state resume are described in [training operations](TRAINING_OPERATIONS.md). The managed DDP launcher requires actual two-GPU verification; single-GPU checks do not establish that support. Automatic batch sizing and arbitrary backbone substitution remain unsupported. DINOv3's official

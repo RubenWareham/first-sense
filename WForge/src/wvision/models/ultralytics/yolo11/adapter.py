@@ -31,6 +31,7 @@ class UltralyticsYOLO11:
         if python:
             raise ValueError("backend_python is not used by the in-process Ultralytics adapter")
         self.spec = spec
+        self.scale = spec.model_id.removesuffix("-pose")[-1]
         self.external_checkpoint = spec.task == "detect"
         kind = "pose" if spec.task == "pose" else "detection"
         self.evaluator = f"ultralytics {BACKEND_VERSION} {kind} AP"
@@ -76,7 +77,7 @@ class UltralyticsYOLO11:
             joints = tuple(dataset.skeleton["joints"])
             if len(joints) == len(JOINTS) and joints != JOINTS:
                 raise ValueError(
-                    "YOLO11n-pose uses COCO sigmas for 17 joints and requires COCO joint order"
+                    "YOLO11-pose uses COCO sigmas for 17 joints and requires COCO joint order"
                 )
         return {
             "checkpoint": str(inputs.checkpoint) if inputs.checkpoint else None,
@@ -110,6 +111,7 @@ class UltralyticsYOLO11:
                 directory,
                 {
                     "operation": "train",
+                    "scale": self.scale,
                     "config": settings.to_dict(),
                     "data": str(dataset.write_upstream(directory)),
                     **initialization,
@@ -126,6 +128,7 @@ class UltralyticsYOLO11:
             settings,
             directory,
             task=self.spec.task,
+            scale=self.scale,
             **({"resume": initialization["resume"]} if initialization.get("resume") else {}),
         )
         return TrainingOutput(Path(result["best"]), Path(result["last"]), result["metrics"])
@@ -142,6 +145,7 @@ class UltralyticsYOLO11:
             context.batch,
             device=context.device,
             task=self.spec.task,
+            scale=self.scale,
             **({"skeleton": dataset.skeleton} if dataset.skeleton is not None else {}),
         )
 
@@ -158,6 +162,7 @@ class UltralyticsYOLO11:
             context.imgsz,
             device=context.device,
             task=self.spec.task,
+            scale=self.scale,
             skeleton=context.skeleton,
             **options,
         )
@@ -168,7 +173,7 @@ class UltralyticsYOLO11:
             raise ValueError(
                 "YOLO export verifies tensor inputs; verification_images is for MMDetection"
             )
-        return yolo.export(context.checkpoint, context.imgsz, directory)
+        return yolo.export(context.checkpoint, context.imgsz, directory, scale=self.scale)
 
 
 def create_adapter(spec: ModelSpec, python: str | Path | None) -> DetectionAdapter:

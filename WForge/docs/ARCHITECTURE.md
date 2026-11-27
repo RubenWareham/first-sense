@@ -43,7 +43,7 @@ WForge/
     evaluation/            # learning-method and pretraining comparison workflows
     experiments/           # lifecycle, environment, status, artifact writing
     models/
-      ultralytics/yolo11/  # YOLO11n detection and pose adapter, config, operations
+      ultralytics/yolo11/  # YOLO11 detection and pose adapter, config, operations
       mmdetection/faster_rcnn_r50/  # Faster R-CNN/Soft Teacher + source weights
       mmpretrain/simsiam_r50/      # SimSiam settings, source checks, pretraining worker
       transformers/dinov3_convnext_tiny_detr/  # DETR adapter, local source checks, worker

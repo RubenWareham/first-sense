@@ -66,9 +66,9 @@ def test_constructor_settings_overrides_and_self_contained_run(
     monkeypatch.setattr(ultralytics, "check_dependency", lambda: None)
 
     def train(
-        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str
+        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str, scale: str
     ) -> dict[str, Any]:
-        assert task == "detect"
+        assert task == "detect" and scale == "n"
         assert settings.epochs == 1 and settings.imgsz == 128 and settings.batch == 2
         assert settings.backend_options == {"mixup": 0.3}
         saved = directory / "best.pt"
@@ -85,8 +85,9 @@ def test_constructor_settings_overrides_and_self_contained_run(
         device: str = "cpu",
         *,
         task: str,
+        scale: str,
     ) -> dict[str, float]:
-        assert imgsz == 128 and batch == 2 and task == "detect"
+        assert imgsz == 128 and batch == 2 and task == "detect" and scale == "n"
         return {"fixture/AP": 0.0}
 
     monkeypatch.setattr(ultralytics, "train", train)

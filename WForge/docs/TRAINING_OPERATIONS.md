@@ -244,7 +244,7 @@ the destination shallow when preserving long legacy source filenames.
 
 ## ONNX export
 
-Verified ONNX export covers YOLO11n, DINOv3 ConvNeXt Tiny/DETR, and MMDetection
+Verified ONNX export covers YOLO11 n/s/m/l/x detection, DINOv3 ConvNeXt Tiny/DETR, and MMDetection
 Faster R-CNN / Soft Teacher through pinned MMDeploy. Native portable bundles
 remain available for all registered training workflows.
 Export does not add TensorRT, C++, or video/streaming runtime integration.
@@ -263,7 +263,7 @@ and observed error. The model-specific contracts are:
 
 | Model | Preprocessing | Raw output |
 | --- | --- | --- |
-| YOLO11n | RGB/NCHW, letterbox, normalize to 0–1 | Input-pixel `xywh` boxes and class scores; no NMS |
+| YOLO11 detection | RGB/NCHW, letterbox, normalize to 0–1 | Input-pixel `xywh` boxes and class scores without NMS |
 | DINOv3/DETR | RGB/NCHW, fixed square PIL bilinear resize, divide by 255, ImageNet mean/std; int64 all-ones pixel mask | Query class logits including the final no-object class, and normalized `cxcywh` boxes; no NMS |
 
 For DINOv3, install export dependencies **in its compatible backend environment**:

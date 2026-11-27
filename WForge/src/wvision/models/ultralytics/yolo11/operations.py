@@ -1,4 +1,4 @@
-"""YOLO11n detection and pose operations. Training stays upstream."""
+"""YOLO11 detection and pose operations. Training stays upstream."""
 
 import shutil
 from pathlib import Path
@@ -14,7 +14,6 @@ from wvision.datasets.pose import JOINTS, PoseSkeleton
 from wvision.experiments.artifacts import write_json
 from wvision.models.ultralytics.yolo11.config import TrainConfig
 
-MODEL_ID = "ultralytics/yolo11n"
 SELECTION = {"metric": "0.1 * AP50 + 0.9 * AP50_95", "direction": "maximize"}
 POSE_SELECTION = {
     "metric": "0.1 * (box AP50 + pose AP50) + 0.9 * (box AP50_95 + pose AP50_95)",
@@ -27,20 +26,23 @@ def load_model(
     checkpoint: Path | None,
     task: str = "detect",
     *,
+    scale: str = "n",
     skeleton: PoseSkeleton | None = None,
 ) -> Any:
     if task == "pose" and checkpoint is not None and skeleton is None:
         raise ValueError("A pose checkpoint requires its resolved skeleton")
     suffix = "-pose" if task == "pose" else ""
-    model = factory(str(checkpoint) if checkpoint else f"yolo11n{suffix}.yaml", task=task)
+    model = factory(str(checkpoint) if checkpoint else f"yolo11{scale}{suffix}.yaml", task=task)
     definition = model.model.yaml
     if (
         model.task != task
         or "yolo11" not in Path(definition.get("yaml_file", "")).stem
-        or definition.get("scale") != "n"
+        or definition.get("scale") != scale
         or (task == "pose" and checkpoint is not None and model.names != {0: "person"})
     ):
-        raise ValueError(f"Checkpoint must belong to the registered YOLO11n {task} architecture")
+        raise ValueError(
+            f"Checkpoint must belong to the registered YOLO11{scale} {task} architecture"
+        )
     if (
         skeleton is not None
         and getattr(model.model.model[-1], "kpt_shape", None) != skeleton["kpt_shape"]
@@ -56,6 +58,7 @@ def train(
     directory: Path,
     *,
     task: str = "detect",
+    scale: str = "n",
     resume: dict[str, Any] | None = None,
     distributed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -87,7 +90,7 @@ def train(
                 save_dir=str(upstream),
             )
             torch.save(state, checkpoint)
-        model = load_model(factory, checkpoint, task)
+        model = load_model(factory, checkpoint, task, scale=scale)
 
         def save_recovery(trainer: Any) -> None:
             if (
@@ -129,8 +132,8 @@ def train(
                 "version": BACKEND_VERSION,
                 "repository": "https://github.com/ultralytics/ultralytics",
                 "release": "v8.3.4",
-                "model": f"{MODEL_ID}-pose" if task == "pose" else MODEL_ID,
-                "scale": "n",
+                "model": f"ultralytics/yolo11{scale}" + ("-pose" if task == "pose" else ""),
+                "scale": scale,
                 "bundled_definition": f"cfg/models/11/{name}",
                 "definition_sha256": sha256(definition),
                 "initialization": "optimizer-state resume"
@@ -192,10 +195,11 @@ def evaluate(
     device: str = "cpu",
     *,
     task: str = "detect",
+    scale: str = "n",
     skeleton: PoseSkeleton | None = None,
 ) -> dict[str, float]:
     with backend(device, directory) as factory:
-        model = load_model(factory, checkpoint, task, skeleton=skeleton)
+        model = load_model(factory, checkpoint, task, scale=scale, skeleton=skeleton)
         if model.names != classes:
             raise ValueError("Checkpoint class map does not match the evaluation dataset")
         result = model.val(
@@ -275,6 +279,7 @@ def predict(
     device: str = "cpu",
     *,
     task: str = "detect",
+    scale: str = "n",
     skeleton: PoseSkeleton | None = None,
     **options: Any,
 ) -> int:
@@ -282,7 +287,7 @@ def predict(
 
     count = 0
     with backend(device, directory) as factory:
-        model = load_model(factory, checkpoint, task, skeleton=skeleton)
+        model = load_model(factory, checkpoint, task, scale=scale, skeleton=skeleton)
         with (directory / "predictions.jsonl").open("w", encoding="utf-8") as handle:
             for result in model.predict(
                 source=source,
@@ -322,7 +327,7 @@ def predict(
     return count
 
 
-def export(checkpoint: Path, size: int, directory: Path) -> Path:
+def export(checkpoint: Path, size: int, directory: Path, *, scale: str = "n") -> Path:
     """Use upstream ONNX export and check raw outputs against the FP32 model."""
     try:
         import numpy as np
@@ -337,7 +342,7 @@ def export(checkpoint: Path, size: int, directory: Path) -> Path:
     local = directory / "model.pt"
     shutil.copyfile(checkpoint, local)
     with backend("cpu", directory) as factory:
-        model = load_model(factory, local)
+        model = load_model(factory, local, scale=scale)
         target = Path(
             model.export(
                 format="onnx",

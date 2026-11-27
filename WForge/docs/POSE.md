@@ -1,11 +1,11 @@
 # Supervised 2D human pose
 
-For a top-down model that takes person boxes and supports COCO-17 or Halpe-26,
+For top-down models that take person boxes and support COCO-17 or Halpe-26,
 see the [RTMPose guide](RTMPOSE.md).
 
-YOLO11n-pose predicts a person box and the joints declared by your dataset. It uses
-Ultralytics 8.3.4 and the same `Vision` API and CLI as detection. The first
-workflow supports supervised FP32 training from random initialization, native
+YOLO11 n/s/m/l/x pose variants predict a person box and the joints declared by
+your dataset. They use Ultralytics 8.3.4 and the same `Vision` API and CLI as
+detection. The workflow supports supervised FP32 training from random initialization, native
 validation and test, and prediction from the selected WForge checkpoint. It is
 verified on Windows CPU and one NVIDIA CUDA GPU.
 
@@ -16,6 +16,9 @@ generate a tiny local fixture and train the smoke profile:
 python examples/make_tiny_pose_dataset.py .wvision/tiny-pose
 python -m wvision train --model models/pose/yolo11n-pose/smoke.yaml --data .wvision/tiny-pose/dataset.yaml
 ```
+
+Swap `yolo11n-pose` in that path for `yolo11s-pose`, `yolo11m-pose`,
+`yolo11l-pose`, or `yolo11x-pose` to choose a larger model.
 
 For a single NVIDIA GPU, use the CUDA environment and add `--device cuda:0`
 to the training command. Evaluation and prediction default to the run's device.

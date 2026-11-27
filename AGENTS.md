@@ -2,7 +2,7 @@
 
 Guidance for coding agents working in the First Sense repository.
 
-First Sense currently implements WForge training/evaluation through the `wvision` Python API and CLI. Detection, Soft Teacher, SimSiam, and DINOv3/DETR have documented support boundaries. Pose, classification, and local/edge runtime work remain roadmap items; do not add empty component folders or advertise C++/TensorRT/DeepStream support before implementation. Read `WForge/AGENTS.md` for model/data rules.
+First Sense currently implements WForge training/evaluation through the `wvision` Python API and CLI. Detection, supervised 2D pose, Soft Teacher, SimSiam, and DINOv3/DETR have documented support boundaries. Classification and local/edge runtime work remain roadmap items; do not add empty component folders or advertise C++/TensorRT/DeepStream support before implementation. Read `WForge/AGENTS.md` for model/data rules.
 
 ## Core principles
 

@@ -21,18 +21,18 @@ dataset validation, experiment tracking, and normalized results.
 
 | Model / method | Workflow | Guide |
 | --- | --- | --- |
-| YOLO11n | Supervised detection; fine-tuning from a trusted local checkpoint | [Detection](docs/DEVELOPMENT.md) |
-| YOLO11n-pose | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton | [Pose](docs/POSE.md) |
-| RTMPose-t | Supervised top-down COCO-17 or Halpe-26 pose from person boxes | [RTMPose](docs/RTMPOSE.md) |
+| YOLO11 n/s/m/l/x | Supervised detection and fine-tuning from a matching trusted local checkpoint | [Detection](docs/DEVELOPMENT.md) |
+| YOLO11-pose n/s/m/l/x | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton | [Pose](docs/POSE.md) |
+| RTMPose t/s/m/l/x | Supervised top-down COCO-17 or Halpe-26 pose from person boxes | [RTMPose](docs/RTMPOSE.md) |
+| RTMDet tiny/s/m/l/x | Supervised detection with native COCO bbox evaluation | [RTMDet](docs/RTMDET.md) |
 | Faster R-CNN R50-FPN + Soft Teacher | Supervised and semi-supervised detection using labeled and unlabeled images | [Semi-supervised detection](docs/SEMI_SUPERVISED.md) |
 | SimSiam ResNet-50 | Self-supervised pretraining; backbone transfer into Faster R-CNN or Soft Teacher | [Self-supervised learning](docs/SELF_SUPERVISED.md) |
 | DINOv3 ConvNeXt Tiny + DETR | Supervised detection with random or explicitly supplied local backbone weights | [DINOv3](docs/DINOV3.md) |
 
-**Verified on Windows: CPU and single-NVIDIA-GPU workflows for all listed models.**
 The main application uses Python 3.12. YOLO runs in that process; DINOv3 uses an
-isolated Python 3.12 backend. Faster R-CNN, Soft Teacher, and SimSiam use separate
-Python 3.10 backends. Each CUDA environment has its own verified torch build;
-see [GPU setup](docs/GPU.md). Optimizer-state recovery, explicit mixed precision,
+isolated Python 3.12 backend. The OpenMMLab integrations use isolated Python 3.10
+backends. See [GPU setup](docs/GPU.md) and the [verification index](docs/verification/README.md)
+for the Windows environments and hardware checks. Optimizer-state recovery, explicit mixed precision,
 portable bundles, multi-model/parameter-grid comparison with shared COCO validation,
 and YOLO/DINOv3/MMDetection ONNX export are described in [training operations](docs/TRAINING_OPERATIONS.md).
 The managed DDP launcher still needs actual two-GPU verification. Fully unsupervised
@@ -225,6 +225,7 @@ copies protect source files from backend caches.
 - [Semi-supervised detection](docs/SEMI_SUPERVISED.md)
 - [Self-supervised pretraining](docs/SELF_SUPERVISED.md)
 - [DINOv3 detection](docs/DINOV3.md)
+- [RTMDet detection](docs/RTMDET.md) and [RTMPose](docs/RTMPOSE.md)
 - [GPU setup and execution](docs/GPU.md)
 - [Training operations, experiment comparison, bundles, and export](docs/TRAINING_OPERATIONS.md)
 - [Weight compatibility](docs/WEIGHT_COMPATIBILITY.md)

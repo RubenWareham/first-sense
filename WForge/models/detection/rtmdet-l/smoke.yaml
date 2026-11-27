@@ -1,0 +1,17 @@
+schema_version: 1
+model: mmdetection/rtmdet-l
+task: detect
+profile: smoke
+description: One supervised RTMDet iteration from random initialization.
+upstream:
+  repository: https://github.com/open-mmlab/mmdetection
+  version: 3.3.0
+  reference: configs/rtmdet/rtmdet_l_8xb32-300e_coco.py
+  license: Apache-2.0
+training:
+  schema_version: 1
+  max_iters: 1
+  imgsz: 64
+  batch: 2
+  seed: 0
+  device: cpu

@@ -21,7 +21,7 @@ The YOLO11 integration lives in
 
 - `adapter.py`: supported operation contract and dataset/result translation.
 - `config.py`: validated YOLO11 training settings, formerly mixed into core config.
-- `operations.py`: existing YOLO11n architecture/loading checks, provenance, and
+- `operations.py`: YOLO11 task and scale checks, provenance, and
   upstream train/evaluate/predict calls.
 
 Reusable runtime/version/device/network settings remain in
@@ -39,6 +39,8 @@ the same ownership rule:
 | Model folder | Responsibilities |
 | --- | --- |
 | `models/mmdetection/faster_rcnn_r50/` | Detector/Soft Teacher adapter, config, checked detector sources, operations worker |
+| `models/mmdetection/rtmdet/` | RTMDet recipe selection and supervised training settings; shares MMDetection evaluation and prediction |
+| `models/mmpose/rtmpose_t/` | RTMPose sizes and top-down pose worker |
 | `models/mmpretrain/simsiam_r50/` | Config, source-run validation/worker launcher, operations worker |
 | `models/transformers/dinov3_convnext_tiny_detr/` | Adapter, config/local backbone validation, operations worker |
 

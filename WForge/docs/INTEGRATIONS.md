@@ -4,7 +4,7 @@
 
 Integrate existing implementations with documented entry points, accessible weights/configurations, acceptable terms, a viable dependency environment, and a reproducible evaluation path. An adapter is a translation layer, not a new training framework.
 
-Ultralytics, MMDetection Soft Teacher/Faster R-CNN, MMPreTrain SimSiam-to-detection transfer, and Transformers DINOv3/DETR execution are implemented as recorded below. Official pretrained DINOv3 weights remain an open gate. Other candidates remain **unimplemented and unsupported**. Check maintenance, compatibility, and terms again before adding or upgrading a backend.
+The support ledger covers implemented integrations and their verification. Official pretrained DINOv3 weights remain an open gate. Check maintenance, compatibility, and terms again before adding or upgrading a backend.
 
 ## Initial candidates
 
@@ -44,9 +44,10 @@ Keep each backend in its own optional extra and documented environment. If compa
 
 | Backend | Model/release | Learning modes | Operations verified | Status |
 | --- | --- | --- | --- | --- |
-| Ultralytics | YOLO11n / 8.3.4 | Supervised detection | Python and CLI train, val, test, predict; Python local-checkpoint fine-tuning | Verified Windows CPU and single-device CUDA, Python 3.12.3; see [CUDA evidence](verification/YOLO_DINOV3_CUDA.md) and [CPU evidence](verification/BASELINE.md) |
-| Ultralytics | YOLO11n-pose / 8.3.4 | Supervised pose with a dataset-defined skeleton | Train from random initialization, native val/test, prediction from a completed run | FP32 verified on Windows CPU and single-device CUDA. See [pose guide](POSE.md) and [verification](verification/POSE.md). |
-| MMPose | RTMPose-t / 1.3.2 | Supervised top-down 2D pose | COCO-17 and Halpe-26 training, ground-truth-box validation/test, prediction from supplied boxes | Isolated Python 3.10 OpenMMLab stack. See [RTMPose setup](RTMPOSE.md). |
+| Ultralytics | YOLO11 n/s/m/l/x / 8.3.4 | Supervised detection | Train, val, test, predict, verified FP32 ONNX export | See [detection guide](DEVELOPMENT.md) and [milestone evidence](MILESTONES.md#m4b--yolo11-and-rtmpose-sizes-and-rtmdet-detection). |
+| Ultralytics | YOLO11-pose n/s/m/l/x / 8.3.4 | Supervised pose with a dataset-defined skeleton | Train from random initialization, native val/test, prediction from a completed run | See [pose guide](POSE.md) and [milestone evidence](MILESTONES.md#m4b--yolo11-and-rtmpose-sizes-and-rtmdet-detection). |
+| MMPose | RTMPose t/s/m/l/x / 1.3.2 | Supervised top-down 2D pose | COCO-17 and Halpe-26 training, ground-truth-box validation/test, prediction from supplied boxes | Isolated Python 3.10 OpenMMLab stack. See [RTMPose setup](RTMPOSE.md). |
+| MMDetection | RTMDet tiny/s/m/l/x / 3.3.0 | Supervised detection | Train from random initialization, native bbox val/test, prediction from a completed run | Isolated Python 3.10 OpenMMLab stack. See [RTMDet setup](RTMDET.md). |
 | MMDetection | Faster R-CNN R50-FPN / 3.3.0; upstream Soft Teacher in semi-supervised mode | Supervised and semi-supervised detection | Train, val, test, predict; label budgets and same-detector comparison; MMDeploy ONNX export | Verified isolated Windows CPU and single-NVIDIA-GPU CUDA, Python 3.10.20 backend / 3.12.3 core; see [GPU guide](GPU.md), [CUDA evidence](verification/OPENMMLAB_CUDA.md), and [CPU export evidence](verification/MMDET_ONNX.md) |
 | MMPreTrain + MMDetection | SimSiam ResNet-50 / 1.2.0; Faster R-CNN / 3.3.0 | Self-supervised pretraining with supervised or semi-supervised detection transfer | Pretrain; checked backbone transfer; downstream train/val/test/predict and random-vs-transfer comparison | Verified isolated Windows CPU and CUDA backends; see [GPU evidence](verification/OPENMMLAB_CUDA.md) and [M3 evidence](verification/SIMSIAM.md) |
 | Transformers | DINOv3 ConvNeXt Tiny + DETR / 5.22.2 | Supervised downstream detection; optional local backbone initialization | Train, val, test, predict; explicit random and owned local-fixture paths | Windows CPU/CUDA execution verified; **official pretrained DINOv3 transfer pending**; see [status](DINOV3.md) and [evidence](verification/DINOV3.md) |

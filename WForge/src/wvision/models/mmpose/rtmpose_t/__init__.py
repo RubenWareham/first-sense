@@ -1,1 +1,1 @@
-"""RTMPose-t top-down human pose."""
+"""RTMPose top-down human pose."""

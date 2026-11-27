@@ -60,7 +60,7 @@ def test_catalog_extension_uses_existing_facade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A new reviewed catalog entry can reuse an adapter without any Vision/CLI branch.
-    spec = replace(registry.get_model("ultralytics/yolo11n"), model_id="test/yolo-alias")
+    spec = replace(registry.get_model("ultralytics/yolo11n"), model_id="test/yolo11n")
     monkeypatch.setattr(
         registry,
         "_MODELS",
@@ -70,9 +70,9 @@ def test_catalog_extension_uses_existing_facade(
     called = []
 
     def train(
-        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str
+        checkpoint: Any, data: Path, settings: Any, directory: Path, *, task: str, scale: str
     ) -> dict[str, Any]:
-        assert task == "detect"
+        assert task == "detect" and scale == "n"
         called.append("train")
         weights = directory / "best.pt"
         weights.write_bytes(b"fixture checkpoint, not a model")

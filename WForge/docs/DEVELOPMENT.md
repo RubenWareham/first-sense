@@ -36,6 +36,11 @@ Restricted Windows sandboxes may deny named pipes used by upstream label checkin
 
 ## Configuration and public operations
 
+The YOLO11 detection IDs are `ultralytics/yolo11n`, `ultralytics/yolo11s`,
+`ultralytics/yolo11m`, `ultralytics/yolo11l`, and `ultralytics/yolo11x`.
+Use the corresponding [smoke profile](../models/README.md#catalog) to run a
+one-epoch check or select an ID and set your own training budget.
+
 This section describes the Ultralytics adapter. The [semi-supervised guide](SEMI_SUPERVISED.md) describes MMDetection; the [self-supervised guide](SELF_SUPERVISED.md) describes SimSiam pretraining and detection transfer; the [DINOv3 guide](DINOV3.md) describes Transformers' downstream detector and pending official-weight verification. Each documents its environment and limits. `wvision models` / `list_models()` expose the catalog without loading ML frameworks. New integrations follow the [adapter strategy](MODEL_ADAPTERS.md).
 
 `Vision(model).train(data, **overrides)` resolves adapter defaults, selected model-document settings, then explicit overrides. The CLI uses the same path. The manifest is a separate `data` argument. Unknown fields are errors.

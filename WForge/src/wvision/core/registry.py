@@ -20,38 +20,66 @@ def _vision_capabilities(
 
 # Factories are fixed, reviewed source references. They cannot be supplied through YAML.
 _MODELS: tuple[tuple[ModelSpec, str | None], ...] = (
-    (
-        ModelSpec(
+    *(
+        (
+            ModelSpec(
+                model_id,
+                "ultralytics",
+                "detect",
+                _vision_capabilities(("supervised",), ("cpu", "cuda")),
+                "Supervised YOLO11 detection; random or matching trusted local weights",
+                (InitializationRule(model_id, "checkpoint", "detector", "supervised"),),
+                exports=("onnx",),
+            ),
+            "wvision.models.ultralytics.yolo11.adapter:create_adapter",
+        )
+        for model_id in (
             "ultralytics/yolo11n",
-            "ultralytics",
-            "detect",
-            _vision_capabilities(("supervised",), ("cpu", "cuda")),
-            "Verified Windows CPU/CUDA; random or trusted local YOLO11n initialization",
-            (InitializationRule("ultralytics/yolo11n", "checkpoint", "detector", "supervised"),),
-            exports=("onnx",),
-        ),
-        "wvision.models.ultralytics.yolo11.adapter:create_adapter",
+            "ultralytics/yolo11s",
+            "ultralytics/yolo11m",
+            "ultralytics/yolo11l",
+            "ultralytics/yolo11x",
+        )
     ),
-    (
-        ModelSpec(
-            "ultralytics/yolo11n-pose",
-            "ultralytics",
-            "pose",
-            _vision_capabilities(("supervised",), ("cpu", "cuda")),
-            "Human pose with a dataset-defined skeleton; supervised FP32 on CPU and single GPU",
-        ),
-        "wvision.models.ultralytics.yolo11.adapter:create_adapter",
+    *(
+        (
+            ModelSpec(
+                f"ultralytics/yolo11{size}-pose",
+                "ultralytics",
+                "pose",
+                _vision_capabilities(("supervised",), ("cpu", "cuda")),
+                "Human pose with a dataset-defined skeleton; supervised FP32 on CPU and single GPU",
+            ),
+            "wvision.models.ultralytics.yolo11.adapter:create_adapter",
+        )
+        for size in ("n", "s", "m", "l", "x")
     ),
-    (
-        ModelSpec(
-            "mmpose/rtmpose-t",
-            "mmpose",
-            "pose",
-            _vision_capabilities(("supervised",), ("cpu", "cuda")),
-            "RTMPose-t with COCO-17 or Halpe-26; prediction takes explicit person boxes",
-            requires_person_boxes=True,
-        ),
-        "wvision.models.mmpose.rtmpose_t.adapter:create_adapter",
+    *(
+        (
+            ModelSpec(
+                f"mmpose/rtmpose-{size}",
+                "mmpose",
+                "pose",
+                _vision_capabilities(("supervised",), ("cpu", "cuda")),
+                "Top-down COCO-17 or Halpe-26 pose; prediction takes explicit person boxes",
+                requires_person_boxes=True,
+            ),
+            "wvision.models.mmpose.rtmpose_t.adapter:create_adapter",
+        )
+        for size in ("t", "s", "m", "l", "x")
+    ),
+    *(
+        (
+            ModelSpec(
+                f"mmdetection/rtmdet-{size}",
+                "mmdetection",
+                "detect",
+                _vision_capabilities(("supervised",), ("cpu", "cuda")),
+                "Supervised RTMDet; random initialization and single-device FP32",
+            ),
+            "wvision.models.mmdetection.rtmdet.adapter:create_adapter",
+        )
+        for size in ("tiny", "s", "m", "l", "x")
     ),
     (
         ModelSpec(

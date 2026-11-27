@@ -41,16 +41,16 @@ underlying frameworks.
 
 | Model / method | Current workflow |
 | --- | --- |
-| YOLO11n | Supervised object detection and local-checkpoint fine-tuning |
-| YOLO11n-pose | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton |
-| RTMPose-t | Supervised top-down 2D pose with COCO-17 or Halpe-26 |
+| YOLO11 n/s/m/l/x | Supervised object detection and local-checkpoint fine-tuning |
+| YOLO11-pose n/s/m/l/x | Supervised 2D human pose with COCO-17, Halpe-26, or a custom skeleton |
+| RTMPose t/s/m/l/x | Supervised top-down 2D pose with COCO-17 or Halpe-26 |
+| RTMDet tiny/s/m/l/x | Supervised object detection |
 | Faster R-CNN / Soft Teacher | Supervised and semi-supervised object detection |
 | SimSiam ResNet-50 | Self-supervised representation pretraining and checked detector transfer |
 | DINOv3 ConvNeXt Tiny / DETR | Supervised detection with random or supplied local backbone weights |
 
-Supported workflows have been checked on Windows with CPU and a single NVIDIA
-GPU, using separate compatible backend environments. See the
-[model and environment details](WForge/README.md#supported-workflows).
+The [model and environment guides](WForge/README.md#supported-workflows) list
+verified Windows CPU and single-NVIDIA-GPU checks and per-workflow limits.
 
 ## Where First Sense is heading
 

@@ -1,0 +1,17 @@
+schema_version: 1
+model: mmpose/rtmpose-x
+task: pose
+profile: smoke
+description: One supervised RTMPose-x epoch from random initialization.
+upstream:
+  repository: https://github.com/open-mmlab/mmpose
+  version: 1.3.2
+  reference: configs/body_2d_keypoint/rtmpose/body8/rtmpose-x_8xb256-700e_body8-halpe26-384x288.py
+  license: Apache-2.0
+training:
+  schema_version: 1
+  epochs: 1
+  imgsz: 384
+  batch: 1
+  seed: 0
+  device: cpu

@@ -400,6 +400,48 @@ See the [implementation plan](POSE_PLAN.md), [usage](POSE.md), and
 
 Exit gate: one existing 2D pose model completes the public workflow with correct keypoint semantics. Semi-supervised or unsupervised pose remains unsupported until separately verified.
 
+## M4b — YOLO11 and RTMPose sizes and RTMDet detection
+
+- [x] Add YOLO11 s/m/l/x detection and pose alongside n, with task and scale
+  checks when loading checkpoints.
+- [x] Add RTMPose s/m/l/x alongside t for COCO-17 and Halpe-26. Use the installed
+  192×256 COCO recipes for t/s/m/l and the 288×384 Body8 recipe for x.
+- [x] Add supervised RTMDet tiny/s/m/l/x through MMDetection, with separate
+  validation and test metrics and normalized pixel-box predictions.
+- [x] Add registered IDs, smoke profiles and an RTMDet-to-RTMPose example using
+  the existing person-box input.
+
+The [model catalog](../models/README.md#catalog), [RTMDet guide](RTMDET.md), and
+[RTMPose guide](RTMPOSE.md) describe profiles, model sources, and setup.
+The RTM workflows start from random weights and use supervised single-device FP32.
+
+Verification uses the synthetic detection and keypoint fixtures. From WForge
+with the pinned YOLO application environment and the isolated interpreters set
+in `WVISION_MMDET_PYTHON` and `WVISION_MMPOSE_PYTHON`:
+
+```powershell
+$env:WVISION_TEST_OFFLINE = "1"
+$env:WVISION_TEST_DEVICE = "cpu"
+python -m pytest -q -m integration tests/test_detection_variants.py tests/test_rtmpose.py
+$env:WVISION_TEST_DEVICE = "cuda:0"
+python -m pytest -q -m integration tests/test_detection_variants.py tests/test_rtmpose.py -k "detect-x or pose-x or tiny or rtmdet_workflow[x] or x-halpe26"
+```
+
+Evidence (2026-11-25): 20 CPU cases completed train, validation, test, and
+prediction on Windows. These cover all eight added YOLO11 variants, all five
+RTMDet sizes, and seven RTMPose size/skeleton combinations. Five cases completed
+the same workflow on one NVIDIA RTX 4050 Laptop GPU. RTMDet-x also trained with
+batch size one through the CLI. YOLO11 s/m/l/x detection exports matched native
+FP32 outputs at 64×64 with ONNX Runtime 1.20.1.
+
+The checks used Python 3.12.3 with Ultralytics 8.3.4 and PyTorch 2.4.1
+(CPU or cu124), plus an isolated Python 3.10.20 stack with MMDetection 3.3.0,
+MMPose 1.3.2, and PyTorch 2.1.0+cu121. All 207 core tests and both existing
+MMDetection integration regressions passed. Ruff, mypy, and source/wheel builds
+passed. The installed wheel ran the RTMDet CLI prediction and passed three
+synthetic RTMDet boxes to RTMPose, which returned 26 joints per box.
+These checks establish workflow execution on synthetic fixtures.
+
 ## M5 — Image classification
 
 Depends on M4.

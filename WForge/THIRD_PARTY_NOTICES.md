@@ -27,6 +27,10 @@ The initial integration uses the bundled YOLO11n configuration and random initia
 
 The MMDetection integration loads the installed upstream Soft Teacher recipe and reuses upstream Faster R-CNN and teacher-student algorithms. It starts randomly or from explicitly supplied compatible WVision source runs, and distributes no pretrained assets. Runtime recipe adaptation and provenance are documented in the [semi-supervised guide](docs/SEMI_SUPERVISED.md). Upstream source is not vendored into WVision.
 
+[RTMDet](docs/RTMDET.md) and [RTMPose](docs/RTMPOSE.md) load installed upstream
+recipes from MMDetection 3.3.0 and MMPose 1.3.2, respectively. Both start from
+random weights and use the caller's dataset.
+
 Optional ONNX conversion calls MMDeploy's installed exporter, decoding and NMS.
 Small conversion hooks in `faster_rcnn_r50/deployment.py` preserve MMDetection's
 per-pyramid-level proposal NMS and class-specific regression boxes, which the

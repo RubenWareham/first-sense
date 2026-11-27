@@ -39,15 +39,30 @@ def test_topdown_inputs_and_pose_conversion(tmp_path: Path) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("skeleton,count", [("coco17", 17), ("halpe26", 26)])
-def test_rtmpose_workflow(tmp_path: Path, skeleton: str, count: int) -> None:
+@pytest.mark.parametrize(
+    "size,skeleton,count",
+    [
+        ("t", "coco17", 17),
+        ("t", "halpe26", 26),
+        ("s", "coco17", 17),
+        ("m", "halpe26", 26),
+        ("l", "coco17", 17),
+        ("x", "halpe26", 26),
+        ("x", "coco17", 17),
+    ],
+)
+def test_rtmpose_workflow(tmp_path: Path, size: str, skeleton: str, count: int) -> None:
     backend = os.environ.get("WVISION_MMPOSE_PYTHON")
     if not backend:
         pytest.skip("Set WVISION_MMPOSE_PYTHON to the pinned MMPose environment")
     device = os.environ.get("WVISION_TEST_DEVICE", "cpu")
     data = create_pose_dataset(tmp_path / "pose", skeleton)
     output = tmp_path / "runs"
-    trained = Vision(PROFILE, backend_python=backend).train(data, device=device, output=output)
+    profile = f"models/pose/rtmpose-{size}/smoke.yaml"
+    trained = Vision(profile, backend_python=backend).train(data, device=device, output=output)
+    source = json.loads((trained.artifact_dir / "model-source.json").read_text(encoding="utf-8"))
+    assert source["model"] == f"mmpose/rtmpose-{size}"
+    assert source["crop_size_wh"] == ([288, 384] if size == "x" else [192, 256])
     assert trained.best_checkpoint.is_file() and trained.last_checkpoint.is_file()
     assert 0 <= trained.metrics["mmpose/coco/AP"] <= 1
     assert not (trained.artifact_dir / "data/test").exists()

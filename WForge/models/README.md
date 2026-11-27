@@ -32,9 +32,10 @@ The existing YAML paths and `Vision("ultralytics/yolo11n")` remain unchanged.
 
 | Model | Configs | Purpose |
 | --- | --- | --- |
-| YOLO11n | [supervised](detection/yolo11n/supervised.yaml), [smoke](detection/yolo11n/smoke.yaml) | Supervised defaults or one-epoch execution check |
-| YOLO11n-pose | [smoke](pose/yolo11n-pose/smoke.yaml) | One-epoch supervised pose execution check using the dataset's skeleton |
-| RTMPose-t | [smoke](pose/rtmpose-t/smoke.yaml) | One-epoch top-down COCO-17 or Halpe-26 pose check |
+| YOLO11 detection | Smoke profiles for [n](detection/yolo11n/smoke.yaml), [s](detection/yolo11s/smoke.yaml), [m](detection/yolo11m/smoke.yaml), [l](detection/yolo11l/smoke.yaml), [x](detection/yolo11x/smoke.yaml) | One-epoch execution check. See also [YOLO11n supervised defaults](detection/yolo11n/supervised.yaml). |
+| YOLO11 pose | Smoke profiles for [n](pose/yolo11n-pose/smoke.yaml), [s](pose/yolo11s-pose/smoke.yaml), [m](pose/yolo11m-pose/smoke.yaml), [l](pose/yolo11l-pose/smoke.yaml), [x](pose/yolo11x-pose/smoke.yaml) | Supervised pose with the dataset's skeleton |
+| RTMPose | Smoke profiles for [t](pose/rtmpose-t/smoke.yaml), [s](pose/rtmpose-s/smoke.yaml), [m](pose/rtmpose-m/smoke.yaml), [l](pose/rtmpose-l/smoke.yaml), [x](pose/rtmpose-x/smoke.yaml) | Top-down COCO-17 or Halpe-26 pose |
+| RTMDet | Smoke profiles for [tiny](detection/rtmdet-tiny/smoke.yaml), [s](detection/rtmdet-s/smoke.yaml), [m](detection/rtmdet-m/smoke.yaml), [l](detection/rtmdet-l/smoke.yaml), [x](detection/rtmdet-x/smoke.yaml) | Supervised bounding-box detection |
 | Faster R-CNN R50-FPN | [supervised](detection/faster-rcnn-r50/supervised.yaml), [supervised smoke](detection/faster-rcnn-r50/supervised-smoke.yaml) | Existing supervised detector |
 | Soft Teacher / Faster R-CNN | [semi-supervised](detection/faster-rcnn-r50/soft-teacher.yaml), [smoke](detection/faster-rcnn-r50/soft-teacher-smoke.yaml), [PyTorch-style smoke](detection/faster-rcnn-r50/soft-teacher-pytorch-smoke.yaml) | Existing labeled/unlabeled method; optional checked detector/backbone initialization |
 | Faster R-CNN / SimSiam transfer | [transfer smoke](detection/faster-rcnn-r50/transfer-smoke.yaml) | Supply a completed SimSiam run through `pretraining_run` |

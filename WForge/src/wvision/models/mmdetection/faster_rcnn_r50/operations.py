@@ -16,34 +16,23 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/openmmlab"))
 from checkpoints import worker_lock  # type: ignore[import-not-found]
+from detection import (  # type: ignore[import-not-found]
+    dataset_config,
+    evaluate,
+    inference_model,
+    load_config,
+    predict,
+    resize_pipeline,
+    train_detector,
+)
 from devices import record_model_device, runtime_device, runtime_precision, worker_context  # type: ignore[import-not-found]
-from runtime import checkpoint_audit, dependencies, dump, resume_checkpoint  # type: ignore[import-not-found]
-
-
-def resize_pipeline(pipeline: Any, size: int) -> None:
-    if isinstance(pipeline, list):
-        for item in pipeline:
-            resize_pipeline(item, size)
-    elif isinstance(pipeline, dict):
-        if pipeline.get("type") == "RandomResize":
-            pipeline["scale"] = [(size, size), (size, size)]
-        elif pipeline.get("type") == "Resize":
-            pipeline["scale"] = (size, size)
-        for value in pipeline.values():
-            if isinstance(value, (dict, list)):
-                resize_pipeline(value, size)
-
-
-def dataset_config(annotation: str, classes: list[str], pipeline: list[Any]) -> dict[str, Any]:
-    return {
-        "type": "CocoDataset",
-        "ann_file": annotation,
-        "data_root": "",
-        "data_prefix": {"img": ""},
-        "metainfo": {"classes": tuple(classes)},
-        "filter_cfg": {"filter_empty_gt": False, "min_size": 1},
-        "pipeline": pipeline,
-    }
+from runtime import (  # type: ignore[import-not-found]
+    checkpoint_audit,
+    dependencies,
+    disable_network_for_tests,
+    dump,
+    resume_checkpoint,
+)
 
 
 def configure(request: dict[str, Any], directory: Path) -> Any:
@@ -243,34 +232,13 @@ def train(request: dict[str, Any], directory: Path) -> dict[str, Any]:
             verify_transfer(runner, request["detector"], directory)
         else:
             initialize_detector(runner, request, directory)
-    runner.train()
-    record_model_device(
-        runner.model, request.get("execution_device", request["config"]["device"]), directory
+    result: dict[str, Any] = train_detector(
+        runner,
+        directory,
+        request.get("execution_device", request["config"]["device"]),
+        request["config"]["max_iters"],
     )
-    if runner.rank != 0:
-        return {}
-    selected = runner.message_hub.get_info("best_ckpt")
-    if selected is None:
-        raise RuntimeError(
-            "Upstream produced no validation-selected checkpoint; inspect validation metrics "
-            "and training stability in backend.log"
-        )
-    best = Path(selected)
-    last = Path(runner.work_dir) / f"iter_{request['config']['max_iters']}.pth"
-    logs = {
-        key: float(history.current()) for key, history in runner.message_hub.log_scalars.items()
-    }
-    dump(directory / "training-scalars.json", logs)
-    if not best.is_file() or not last.is_file():
-        raise RuntimeError("Upstream did not produce selected and final checkpoints")
-    return {
-        "best": str(best),
-        "last": str(last),
-        "model_config": str(directory / "resolved-mmdet.json"),
-        "metrics": {
-            f"mmdetection/{key}": value for key, value in logs.items() if key.startswith("val/")
-        },
-    }
+    return result
 
 
 def verify_transfer(runner: Any, source: dict[str, Any], directory: Path) -> None:
@@ -385,110 +353,12 @@ def audit_initialization(
     runner.register_hook(InitializationAudit(), priority="LOW")
 
 
-def evaluate(request: dict[str, Any], directory: Path) -> dict[str, Any]:
-    from mmdet.apis import inference_detector
-    from mmdet.evaluation.metrics import CocoMetric
-
-    model = inference_model(request)
-    if list(model.dataset_meta["classes"]) != request["classes"]:
-        raise ValueError("Checkpoint class map does not match evaluation data")
-    metric = CocoMetric(
-        ann_file=request["data"],
-        metric="bbox",
-        outfile_prefix=str(directory / "coco-results"),
-    )
-    metric.dataset_meta = {"classes": tuple(request["classes"])}
-    annotations = json.loads(Path(request["data"]).read_text(encoding="utf-8"))
-    for image in annotations["images"]:
-        result = inference_detector(model, image["file_name"])
-        result.set_metainfo({"img_id": image["id"]})
-        metric.process({}, [result.to_dict()])
-    values = metric.evaluate(len(annotations["images"]))
-    if "coco/bbox_mAP" not in values:
-        raise RuntimeError("Upstream COCO evaluation returned no AP metrics; inspect backend.log")
-    record_model_device(model, request.get("device", "cpu"), directory)
-    return {"metrics": {f"mmdetection/{key}": float(value) for key, value in values.items()}}
-
-
-def predict(request: dict[str, Any], directory: Path) -> dict[str, Any]:
-    from mmdet.apis import inference_detector
-
-    model = inference_model(request)
-    classes = dict(enumerate(model.dataset_meta["classes"]))
-    with (directory / "predictions.jsonl").open("w", encoding="utf-8") as handle:
-        for source in request["source"]:
-            result = inference_detector(model, source)
-            instances = result.pred_instances.cpu()
-            handle.write(
-                json.dumps(
-                    {
-                        "sample": source,
-                        "height": result.ori_shape[0],
-                        "width": result.ori_shape[1],
-                        "coordinate_format": "absolute_pixel_xyxy",
-                        "classes": classes,
-                        "boxes": instances.bboxes.tolist(),
-                        "scores": instances.scores.tolist(),
-                        "class_ids": instances.labels.tolist(),
-                    },
-                    allow_nan=False,
-                )
-                + "\n"
-            )
-    record_model_device(model, request.get("device", "cpu"), directory)
-    return {"sample_count": len(request["source"])}
-
-
-def inference_model(request: dict[str, Any]) -> Any:
-    from mmdet.apis import init_detector
-
-    cfg = load_config(request["model_config"])
-    detector = (
-        cfg.model.detector
-        if request.get("learning") == "semi_supervised" or cfg.model.type == "SoftTeacher"
-        else cfg.model
-    )
-    if request.get("score_threshold") is not None:
-        detector.test_cfg.rcnn.score_thr = request["score_threshold"]
-    if request.get("max_detections") is not None:
-        detector.test_cfg.rcnn.max_per_img = request["max_detections"]
-    cfg.test_dataloader.dataset.pipeline = [
-        item for item in cfg.test_dataloader.dataset.pipeline if item["type"] != "LoadAnnotations"
-    ]
-    # The default upstream path assumes a top-level backbone, absent on SoftTeacher.
-    model = init_detector(
-        cfg, request["checkpoint"], device=request.get("device", "cpu"), cfg_options={}
-    )
-    record_model_device(model, request.get("device", "cpu"), Path(request["directory"]))
-    return model
-
-
-def load_config(path: str) -> Any:
-    from mmengine.config import Config
-
-    values = json.loads(Path(path).read_text(encoding="utf-8"))
-    size = values.get("wvision_imgsz") or next(
-        item["scale"][0] for item in values["test_pipeline"] if item["type"] == "Resize"
-    )
-    # JSON turns tuples into lists. Upstream Resize requires tuple-valued image scales.
-    resize_pipeline(values, size)
-    return Config(values)
-
-
 def main() -> None:
     request = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     if request.get("schema_version") != 1:
         raise ValueError("Unsupported worker request schema")
     directory, device = worker_context(request)
-    # Used by offline integration tests, inherited by the subprocess boundary.
-    if os.environ.get("WVISION_TEST_OFFLINE") == "1":
-        import socket
-
-        def deny_network(*args: Any, **kwargs: Any) -> None:
-            raise OSError("Network disabled by WVision integration test")
-
-        socket.socket.connect = deny_network  # type: ignore[method-assign]
-        socket.create_connection = deny_network  # type: ignore[assignment]
+    disable_network_for_tests()
     print("WVision: checking backend environment and compiled operators", flush=True)
     dependencies(directory)
     runtime_device(device, directory, requested=request.get("requested_device"))

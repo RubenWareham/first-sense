@@ -1,0 +1,20 @@
+schema_version: 1
+model: ultralytics/yolo11x-pose
+task: pose
+profile: smoke
+description: One CPU epoch from random initialization to check the pose workflow.
+upstream:
+  repository: https://github.com/ultralytics/ultralytics
+  version: 8.3.4
+  reference: cfg/models/11/yolo11-pose.yaml
+  license: AGPL-3.0 or upstream enterprise terms
+training:
+  schema_version: 1
+  learning: supervised
+  epochs: 1
+  imgsz: 128
+  batch: 2
+  seed: 0
+  device: cpu
+  backend_options:
+    mosaic: 0.0

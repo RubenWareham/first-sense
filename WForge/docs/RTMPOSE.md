@@ -1,11 +1,16 @@
-# RTMPose-t through MMPose
+# RTMPose through MMPose
 
-`mmpose/rtmpose-t` trains a top-down pose model from local COCO-17 or Halpe-26
-annotations. It reuses the [pose dataset format](POSE.md#dataset-and-results).
-WForge converts the selected splits into run-local COCO keypoint files. The
-worker uses MMPose's installed RTMPose-t model and training loop. It adapts
-the recipe for supervised FP32, random initialization, single-device
-BatchNorm and validation each epoch, using the native 192×256 crop.
+Choose `mmpose/rtmpose-t`, `mmpose/rtmpose-s`, `mmpose/rtmpose-m`,
+`mmpose/rtmpose-l`, or `mmpose/rtmpose-x`. Each trains a top-down pose model
+from local COCO-17 or Halpe-26 annotations in the
+[pose dataset format](POSE.md#dataset-and-results). WForge converts the selected
+splits to run-local COCO keypoint files and uses MMPose's installed model and
+training loop with supervised FP32, random initialization, single-device
+BatchNorm, and validation each epoch.
+
+The t/s/m/l variants use 192×256 crops (`imgsz: 256`). The x variant uses the
+upstream Body8 recipe's 288×384 crop (`imgsz: 384`). WForge configures its head
+for the dataset's skeleton and trains only on the supplied local splits.
 
 ## Setup and train
 
@@ -80,12 +85,34 @@ The prediction records preserve box order, skeleton and joint count. Each
 joint uses original-image pixels and the native MMPose score. Instance
 confidence is null because the input only supplies coordinates.
 
+For example, use an [RTMDet](RTMDET.md) run trained to detect people:
+
+```python
+import json
+from pathlib import Path
+
+from wvision import Vision
+
+detector = Vision.from_run("runs/train-detector")
+pose = Vision.from_run("runs/train-pose")
+detection = detector.predict("frame.png", score_threshold=0.25)
+frame = json.loads(detection.predictions.read_text(encoding="utf-8").splitlines()[0])
+boxes = [
+    box
+    for box, category in zip(frame["boxes"], frame["class_ids"], strict=True)
+    if frame["classes"][str(category)] == "person"
+]
+box_file = Path("person-boxes.json")
+box_file.write_text(json.dumps({frame["sample"]: boxes}), encoding="utf-8")
+result = pose.predict(frame["sample"], person_boxes=box_file)
+```
+
 RTMPose currently accepts the two named skeletons. The training workflow
 uses WForge checkpoints from random initialization. Other MMPose families,
 external pretrained checkpoints, optimizer resume, and export are separate
 integrations.
 
-## Local verification
+## RTMPose-t local verification
 
 The offline fixture contains multiple people, an occluded joint, an unlabeled
 joint, and a negative frame. The integration tests train from scratch, reload
@@ -94,9 +121,9 @@ prediction preserves box order and joint count. An empty box list produces an
 empty frame result. The test images are absent from the training workspace.
 
 ```powershell
-python -m pytest -q -m integration tests/test_rtmpose.py
+python -m pytest -q -m integration tests/test_rtmpose.py -k "t-coco17 or t-halpe26"
 $env:WVISION_TEST_DEVICE = "cuda:0"
-python -m pytest -q -m integration tests/test_rtmpose.py -k halpe26
+python -m pytest -q -m integration tests/test_rtmpose.py -k t-halpe26
 ```
 
 The local run on 2026-11-21 used Python 3.10.20, MMPose 1.3.2,

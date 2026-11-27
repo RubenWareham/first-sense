@@ -1,4 +1,4 @@
-"""Validated training settings shared by YOLO11n detection and pose."""
+"""Validated training settings shared by YOLO11 detection and pose."""
 
 import math
 from dataclasses import asdict, dataclass, field

@@ -1,4 +1,4 @@
-"""Isolated RTMPose-t worker using the installed MMPose recipe and runner."""
+"""Isolated RTMPose worker using the installed MMPose recipe and runner."""
 
 import hashlib
 import json
@@ -11,9 +11,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "adapters/openmmlab"))
 from checkpoints import worker_lock  # type: ignore[import-not-found]
 from devices import record_model_device, runtime_device, runtime_precision, worker_context  # type: ignore[import-not-found]
-from runtime import dependencies, dump  # type: ignore[import-not-found]
+from runtime import dependencies, disable_network_for_tests, dump  # type: ignore[import-not-found]
 
-RECIPE = "body_2d_keypoint/rtmpose/coco/rtmpose-t_8xb256-420e_coco-256x192.py"
+RECIPES = {
+    f"mmpose/rtmpose-{size}": f"coco/rtmpose-{size}_8xb256-420e_coco-256x192.py"
+    for size in ("t", "s", "m", "l")
+}
+RECIPES["mmpose/rtmpose-x"] = "body8/rtmpose-x_8xb256-700e_body8-halpe26-384x288.py"
 METAINFO = {"coco17": "coco", "halpe26": "halpe26"}
 
 
@@ -46,12 +50,15 @@ def train(request: dict[str, Any], directory: Path, configs: Path, device: str) 
     from mmengine.config import Config
     from mmengine.runner import Runner
 
-    recipe = configs / RECIPE
+    model_id = request["model_id"]
+    recipe = configs / "body_2d_keypoint/rtmpose" / RECIPES[model_id]
     cfg = Config.fromfile(str(recipe))
     settings = request["config"]
     skeleton = request["skeleton"]
     data = request["data"]
     metainfo = configs / "_base_/datasets" / (METAINFO[skeleton["id"]] + ".py")
+    if cfg.codec.input_size[1] != settings["imgsz"]:
+        raise ValueError("RTMPose input size differs from the selected upstream recipe")
     cfg.model.backbone.init_cfg = None
     cfg.model.backbone.norm_cfg = dict(type="BN")
     cfg.model.head.out_channels = len(skeleton["joints"])
@@ -79,14 +86,14 @@ def train(request: dict[str, Any], directory: Path, configs: Path, device: str) 
         {
             "backend": "mmpose",
             "version": "1.3.2",
-            "model": "mmpose/rtmpose-t",
-            "recipe": RECIPE,
+            "model": model_id,
+            "recipe": recipe.relative_to(configs).as_posix(),
             "recipe_sources": {
                 path.relative_to(configs).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                 for path in (recipe, configs / "_base_/default_runtime.py", metainfo)
             },
             "initialization": "random",
-            "crop_size_wh": [192, 256],
+            "crop_size_wh": list(cfg.codec.input_size),
             "skeleton": skeleton["id"],
         },
     )
@@ -210,6 +217,7 @@ def main() -> None:
     if request.get("schema_version") != 1 or operation not in {"train", "val", "test", "predict"}:
         raise ValueError("Unsupported RTMPose worker request")
     directory, device = worker_context(request)
+    disable_network_for_tests()
     dependencies(directory)
     for name, version in {"mmpose": "1.3.2", "xtcocotools": "1.14.3"}.items():
         if metadata.version(name) != version:

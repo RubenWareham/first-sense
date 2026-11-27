@@ -1,11 +1,24 @@
 """Shared standalone OpenMMLab environment preflight and JSON writing."""
 
 import json
+import os
 import shutil
 import sys
 from importlib import metadata
 from pathlib import Path
 from typing import Any
+
+
+def disable_network_for_tests() -> None:
+    if os.environ.get("WVISION_TEST_OFFLINE") != "1":
+        return
+    import socket
+
+    def deny_network(*args: Any, **kwargs: Any) -> None:
+        raise OSError("Network disabled by WVision integration test")
+
+    socket.socket.connect = deny_network  # type: ignore[method-assign]
+    socket.create_connection = deny_network  # type: ignore[assignment]
 
 
 def checkpoint_audit(runner: Any, directory: Path) -> None:

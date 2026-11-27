@@ -1,6 +1,6 @@
-"""Core-side validation and artifact transport for RTMPose-t."""
+"""Core-side validation and artifact transport for RTMPose."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -43,24 +43,25 @@ class RTMPose:
 
     def __init__(self, spec: ModelSpec, python: str | Path | None) -> None:
         self.spec = spec
+        self.imgsz = 384 if spec.model_id == "mmpose/rtmpose-x" else 256
         self.python = interpreter(
             python, env="WVISION_MMPOSE_PYTHON", backend="MMPose", guide="RTMPOSE.md"
         )
 
     def resolve(self, values: dict[str, Any]) -> RTMPoseSettings:
         reject_unknown(values, set(RTMPoseSettings.__dataclass_fields__), "RTMPose settings")
-        settings = RTMPoseSettings(**values)
+        settings = RTMPoseSettings(**{"imgsz": self.imgsz, **values})
         if type(settings.schema_version) is not int or settings.schema_version != 1:
             raise ValueError("RTMPose requires training schema_version=1")
         if settings.learning != "supervised" or settings.precision != "fp32":
             raise ValueError("RTMPose supports supervised FP32 training")
-        if type(settings.imgsz) is not int or settings.imgsz != 256:
-            raise ValueError("RTMPose-t uses a fixed 192x256 crop (imgsz=256)")
+        if type(settings.imgsz) is not int or settings.imgsz != self.imgsz:
+            raise ValueError(f"{self.spec.model_id} requires imgsz={self.imgsz}")
         for name, minimum in (("epochs", 1), ("batch", 1), ("seed", 0)):
             value = getattr(settings, name)
             if type(value) is not int or value < minimum:
                 raise ValueError(f"RTMPose {name} must be an integer >= {minimum}")
-        return RTMPoseSettings(**{**values, "device": canonical_device(settings.device)})
+        return replace(settings, device=canonical_device(settings.device))
 
     def selection(self, learning: str) -> dict[str, str]:
         return {"metric": "mmpose/coco/AP", "direction": "maximize"}
@@ -105,6 +106,7 @@ class RTMPose:
             directory,
             {
                 "operation": "train",
+                "model_id": self.spec.model_id,
                 "config": settings.to_dict(),
                 "skeleton": dataset.skeleton,
                 "data": dataset.write_coco(directory, ("train_labeled", "val"), keypoints=True),

@@ -24,6 +24,7 @@ def main() -> None:
         Path(request["data"]),
         TrainConfig.resolve(request["config"]),
         directory,
+        scale=request["scale"],
         resume=request.get("resume"),
         distributed=request,
     )

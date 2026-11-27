@@ -25,7 +25,7 @@ audit establishes held-out separation, not equal annotation or compute budgets.
 | WVision SimSiam ResNet-50 | Faster R-CNN supervised or Soft Teacher | Backbone only | Held-out overlap checks; PyTorch-style ResNet and RGB normalization; complete backbone state |
 | WVision supervised Faster R-CNN R50-FPN | Faster R-CNN supervised or Soft Teacher | Complete detector | Exact class IDs/names and resolved detector structure/preprocessing; held-out overlap and complete tensor-state checks |
 | WVision supervised Faster R-CNN R50-FPN | Faster R-CNN supervised or Soft Teacher with new classes | Backbone only | Explicit `transfer_scope="backbone"`; matching backbone and preprocessing; new neck/proposal/detection heads; held-out overlap checks |
-| Trusted local YOLO11n checkpoint | YOLO11n supervised | Complete model | Existing YOLO architecture checks; external supervision supplied by owner |
+| Trusted local YOLO11 detection checkpoint | Same YOLO11 size, supervised | Complete model | Task and scale checks; external supervision supplied by owner |
 | Local DINOv3 ConvNeXt Tiny safetensors | DETR supervised | Backbone | Existing strict local loader; official pretrained verification remains open |
 
 The table is an integration boundary, not a statement that every model can use every source. A DINOv3 ConvNeXt checkpoint cannot initialize the current ResNet-50 Soft Teacher detector. A YOLO checkpoint cannot initialize Faster R-CNN. Optimizer-state resume is separate from initialization.

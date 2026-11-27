@@ -1,5 +1,8 @@
 # Verification evidence
 
+[YOLO11 and RTMPose sizes and RTMDet detection](../MILESTONES.md#m4b--yolo11-and-rtmpose-sizes-and-rtmdet-detection)
+records checks for the expanded model families.
+
 [Supervised 2D pose](POSE.md) records local CPU and CUDA train, evaluation and
 prediction checks on 2026-11-19.
 
